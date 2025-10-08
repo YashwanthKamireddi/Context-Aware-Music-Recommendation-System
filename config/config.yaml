@@ -1,0 +1,150 @@
+# Vibe-Sync Configuration
+
+# Data Settings
+data:
+  source: "kaggle"  # or "spotify_api"
+  dataset_path: "data/raw/spotify_tracks.csv"
+  processed_path: "data/processed/"
+  sample_size: 100000  # Number of tracks to use (null for all)
+  train_test_split: 0.8
+  random_seed: 42
+
+# Mood Definitions
+moods:
+  workout:
+    name: "Workout"
+    emoji: "🏋️"
+    criteria:
+      energy_min: 0.7
+      tempo_min: 120
+      danceability_min: 0.6
+  
+  chill:
+    name: "Chill"
+    emoji: "😌"
+    criteria:
+      energy_max: 0.5
+      acousticness_min: 0.5
+      valence_max: 0.6
+  
+  party:
+    name: "Party"
+    emoji: "🎉"
+    criteria:
+      danceability_min: 0.7
+      energy_min: 0.65
+      valence_min: 0.6
+  
+  focus:
+    name: "Focus"
+    emoji: "📚"
+    criteria:
+      instrumentalness_min: 0.5
+      energy_max: 0.6
+      speechiness_max: 0.3
+  
+  sleep:
+    name: "Sleep"
+    emoji: "😴"
+    criteria:
+      energy_max: 0.3
+      acousticness_min: 0.6
+      tempo_max: 100
+
+# Feature Engineering
+features:
+  audio_features:
+    - acousticness
+    - danceability
+    - energy
+    - instrumentalness
+    - liveness
+    - loudness
+    - speechiness
+    - tempo
+    - valence
+  
+  interaction_features:
+    - energy_diff
+    - danceability_diff
+    - valence_diff
+    - tempo_ratio
+  
+  aggregate_features:
+    - mood_avg_energy
+    - mood_avg_danceability
+    - mood_avg_valence
+
+# Model Configuration
+model:
+  baseline:
+    type: "logistic_regression"
+    params:
+      max_iter: 1000
+      class_weight: "balanced"
+  
+  main:
+    type: "lightgbm"
+    params:
+      n_estimators: 100
+      max_depth: 7
+      learning_rate: 0.1
+      num_leaves: 31
+      min_child_samples: 20
+      subsample: 0.8
+      colsample_bytree: 0.8
+      class_weight: "balanced"
+  
+  hyperparameter_tuning:
+    enabled: false  # Disabled for faster training
+    cv_folds: 5
+    param_grid:
+      n_estimators: [50, 100, 200]
+      max_depth: [5, 7, 10]
+      learning_rate: [0.05, 0.1, 0.2]
+
+# Recommendation Engine
+recommender:
+  weights:
+    mood_match: 0.6
+    user_taste: 0.3
+    diversity: 0.1
+  
+  top_k: 20
+  min_confidence: 0.5
+  diversity_penalty: 0.1  # Reduce score for similar tracks
+
+# Evaluation
+evaluation:
+  metrics:
+    - f1_score
+    - roc_auc
+    - precision
+    - recall
+    - accuracy
+  
+  precision_at_k: [10, 20, 30]
+  
+  cross_validation:
+    enabled: true
+    folds: 5
+  
+  output:
+    save_confusion_matrix: true
+    save_feature_importance: true
+    save_classification_report: true
+
+# Output Settings
+output:
+  models_dir: "models/"
+  results_dir: "results/"
+  plots_dir: "results/plots/"
+  reports_dir: "results/reports/"
+  log_level: "INFO"
+
+# Demo Settings
+demo:
+  sample_user_profiles: 5
+  candidate_pool_size: 1000
+  display_top_n: 20
+  show_match_scores: true
