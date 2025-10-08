@@ -16,12 +16,11 @@ plotly>=5.3.0
 tqdm>=4.62.0
 pyyaml>=5.4.0
 
-# Optional: Spotify API Integration
-# spotipy>=2.19.0
-
-# Optional: Web Interface
-# streamlit>=1.10.0
-# flask>=2.0.0
+# Web API & Spotify integration
+fastapi>=0.95.0
+uvicorn[standard]>=0.22.0
+spotipy>=2.24.0
+python-dotenv>=1.0.0
 
 # Development
 pytest>=6.2.0

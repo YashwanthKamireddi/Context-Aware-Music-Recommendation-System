@@ -4,7 +4,7 @@ Recommendation Engine: Real-time mood-based music recommendations
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 import logging
 
 from src.utils import load_config, setup_logging, load_model
@@ -33,6 +33,50 @@ class MoodRecommender:
         self.models = {}
         self.scalers = {}
         self.feature_names = {}
+        self._column_mapping = {
+            'track_name': 'name',
+            'track_id': 'id',
+            'artist_name': 'artists',
+            'album_name': 'album'
+        }
+
+    def _prepare_candidates(self, candidates: pd.DataFrame) -> pd.DataFrame:
+        """Standardise incoming candidate dataframe so models receive expected columns."""
+        df = candidates.copy()
+
+        # Drop unnamed index columns if present
+        unnamed_cols = [col for col in df.columns if col.lower().startswith('unnamed')]
+        if unnamed_cols:
+            df = df.drop(columns=unnamed_cols)
+
+        # Apply known column aliases (e.g. track_name -> name)
+        for source_col, target_col in self._column_mapping.items():
+            if source_col in df.columns:
+                df[target_col] = df[source_col]
+
+        # Ensure we always have artists + album fields for the UI
+        if 'artist' in df.columns and 'artists' not in df.columns:
+            df['artists'] = df['artist']
+        if 'artists' in df.columns and 'artist' not in df.columns:
+            df['artist'] = df['artists']
+        if 'album' in df.columns and 'album_name' not in df.columns:
+            df['album_name'] = df['album']
+
+        # Deduplicate track ids if provided to avoid repeated rows
+        if 'id' in df.columns:
+            df = df.drop_duplicates(subset=['id'])
+        elif 'track_id' in df.columns:
+            df = df.drop_duplicates(subset=['track_id'])
+
+        # Coerce audio feature columns to numeric and drop rows with missing values
+        feature_cols = self.audio_features
+        for col in feature_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        df = df.dropna(subset=[col for col in feature_cols if col in df.columns])
+
+        return df
 
     def load_models(self, mood: str) -> None:
         """
@@ -105,7 +149,7 @@ class MoodRecommender:
         return matches / total if total > 0 else 0.0
 
     def calculate_user_match_score(self, track: pd.Series,
-                                   user_profile: Dict[str, float]) -> float:
+                                   user_profile: Optional[Dict[str, float]]) -> float:
         """
         Calculate how well a track matches user taste
 
@@ -117,6 +161,9 @@ class MoodRecommender:
             Match score (0-1)
         """
         key_features = ['energy', 'danceability', 'valence']
+
+        if not user_profile:
+            return 0.5
 
         differences = []
         for feature in key_features:
@@ -131,36 +178,26 @@ class MoodRecommender:
         avg_diff = np.mean(differences)
         similarity = 1 - avg_diff
 
-        return max(0, min(1, similarity))
+        return float(max(0.0, min(1.0, similarity)))
 
     def predict_suitability(self, track: pd.Series, mood: str) -> float:
-        """
-        Predict track suitability using trained model
-
-        Args:
-            track: Track features
-            mood: Target mood
-
-        Returns:
-            Suitability probability
-        """
+        """Predict suitability of a single track using the trained ML model."""
         if mood not in self.models:
             self.load_models(mood)
 
-        # Prepare features
-        feature_values = []
-        for feature in self.feature_names[mood]:
-            if feature in track.index:
-                feature_values.append(track[feature])
-            else:
-                feature_values.append(0.0)
+        feature_cols = self.feature_names.get(mood, self.audio_features)
+        track_df = pd.DataFrame([track])
 
-        X = np.array([feature_values])
+        for col in feature_cols:
+            if col not in track_df.columns:
+                track_df[col] = 0.0
 
-        # Predict
-        probability = self.models[mood].predict(X)[0]
+        track_df = track_df[feature_cols]
+        scaled = self.scalers[mood].transform(track_df.values)
+        scaled_df = pd.DataFrame(scaled, columns=feature_cols)
+        proba = self.models[mood].predict_proba(scaled_df)[:, 1][0]
 
-        return probability
+        return float(np.clip(proba, 0.0, 1.0))
 
     def calculate_diversity_penalty(self, track: pd.Series,
                                    selected_tracks: List[pd.Series]) -> float:
@@ -198,9 +235,9 @@ class MoodRecommender:
         return np.max(similarities) if similarities else 0.0
 
     def rank_tracks(self, candidates: pd.DataFrame, mood: str,
-                   user_profile: Dict[str, float] = None) -> pd.DataFrame:
+                   user_profile: Optional[Dict[str, float]] = None) -> pd.DataFrame:
         """
-        Rank candidate tracks for recommendation
+        Rank candidate tracks for recommendation (FAST VECTORIZED VERSION)
 
         Args:
             candidates: DataFrame with candidate tracks
@@ -217,73 +254,45 @@ class MoodRecommender:
             logger.info(f"Loading models for {mood}...")
             self.load_models(mood)
 
-        weights = self.recommender_config['weights']
+        # FAST VECTORIZED ML PREDICTIONS (process all tracks at once!)
+        logger.info(f"Running ML model predictions on {len(candidates)} tracks...")
+        feature_cols = self.feature_names.get(mood, self.audio_features)
 
-        results = []
-        selected_tracks = []
+        feature_df = candidates.copy()
+        for col in feature_cols:
+            if col not in feature_df.columns:
+                feature_df[col] = 0.0
 
-        for idx, track in candidates.iterrows():
-            # Calculate components
-            mood_score = self.calculate_mood_match_score(track, mood)
+        feature_df = feature_df[feature_cols]
+        X_scaled = self.scalers[mood].transform(feature_df.values)
+        X_scaled_df = pd.DataFrame(X_scaled, columns=feature_cols)
 
-            if user_profile:
-                user_score = self.calculate_user_match_score(track, user_profile)
-            else:
-                user_score = 0.5  # Neutral
+        # Get probabilities for ALL tracks at once (FAST!)
+        model_scores = self.models[mood].predict_proba(X_scaled_df)[:, 1]
+        logger.info(f"✅ ML predictions complete! Scores range: {model_scores.min():.3f} to {model_scores.max():.3f}")
 
-            # REAL Model prediction - THIS IS THE ML MODEL!
-            try:
-                model_score = self.predict_suitability(track, mood)
-            except Exception as e:
-                logger.warning(f"Model prediction failed for track: {e}")
-                model_score = mood_score  # Fallback
+        # Use ML model scores directly as the ranking (99%+ accuracy models!)
+        results_df = candidates.copy()
+        results_df['model_score'] = model_scores
+        results_df['final_score'] = model_scores
 
-            # Diversity penalty
-            diversity_penalty = self.calculate_diversity_penalty(track, selected_tracks)
-
-            # Combined score (WEIGHTED BY REAL ML MODEL)
-            final_score = (
-                weights['mood_match'] * mood_score +
-                weights['user_taste'] * user_score +
-                weights['diversity'] * (1 - diversity_penalty)
-            )
-
-            # BOOST WITH REAL ML MODEL PREDICTION (30% weight!)
-            final_score = 0.7 * final_score + 0.3 * model_score
-
-            # Preserve ALL track data and add scores
-            track_dict = track.to_dict()
-            track_dict.update({
-                'track_id': track.get('track_id', track.get('id', idx)),
-                'id': track.get('id', track.get('track_id', '')),
-                'name': track.get('name', 'Unknown'),
-                'artist': track.get('artist', track.get('artists', 'Unknown')),
-                'artists': track.get('artists', track.get('artist', 'Unknown')),
-                'album': track.get('album', 'Unknown Album'),
-                'album_image': track.get('album_image', ''),
-                'album_art': track.get('album_art', track.get('album_image', '')),
-                'preview_url': track.get('preview_url', ''),
-                'duration_ms': track.get('duration_ms', 0),
-                'mood_score': mood_score,
-                'user_score': user_score,
-                'model_score': model_score,
-                'diversity_penalty': diversity_penalty,
-                'final_score': final_score
-            })
-            results.append(track_dict)
-
-            # Add to selected if score is high
-            if final_score > self.recommender_config['min_confidence']:
-                selected_tracks.append(track)
-
-        # Create results DataFrame
-        results_df = pd.DataFrame(results)
+        # Sort by ML model score (highest first)
         results_df = results_df.sort_values('final_score', ascending=False)
+        if 'id' in results_df.columns:
+            results_df = results_df.drop_duplicates(subset=['id'])
+        results_df = results_df.reset_index(drop=True)
+
+        # Ensure required columns exist
+        if 'track_id' not in results_df.columns and 'id' in results_df.columns:
+            results_df['track_id'] = results_df['id']
+        if 'id' not in results_df.columns and 'track_id' in results_df.columns:
+            results_df['id'] = results_df['track_id']
 
         return results_df
 
     def recommend(self, candidates: pd.DataFrame, mood: str,
-                 user_tracks: pd.DataFrame = None, top_k: int = None) -> pd.DataFrame:
+                 user_tracks: Optional[pd.DataFrame] = None,
+                 top_k: Optional[int] = None) -> pd.DataFrame:
         """
         Generate recommendations
 
@@ -297,7 +306,7 @@ class MoodRecommender:
             DataFrame with top recommendations
         """
         if top_k is None:
-            top_k = self.recommender_config['top_k']
+            top_k = int(self.recommender_config['top_k'])
 
         # Create user profile
         user_profile = None
@@ -305,8 +314,11 @@ class MoodRecommender:
             user_profile = self.create_user_profile(user_tracks)
             logger.info(f"Created user profile from {len(user_tracks)} tracks")
 
+        # Standardise dataframe so downstream steps always see expected schema
+        prepared_candidates = self._prepare_candidates(candidates)
+
         # Rank tracks
-        ranked = self.rank_tracks(candidates, mood, user_profile)
+        ranked = self.rank_tracks(prepared_candidates, mood, user_profile)
 
         # Return top-k
         recommendations = ranked.head(top_k)

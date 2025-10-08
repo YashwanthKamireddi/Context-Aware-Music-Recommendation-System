@@ -16,10 +16,10 @@ import pandas as pd
 def setup_logging(log_level: str = "INFO") -> logging.Logger:
     """
     Setup logging configuration
-    
+
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR)
-    
+
     Returns:
         Logger instance
     """
@@ -34,10 +34,10 @@ def setup_logging(log_level: str = "INFO") -> logging.Logger:
 def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
     """
     Load configuration from YAML file
-    
+
     Args:
         config_path: Path to config file
-    
+
     Returns:
         Configuration dictionary
     """
@@ -49,7 +49,7 @@ def load_config(config_path: str = "config/config.yaml") -> Dict[str, Any]:
 def ensure_dir(directory: str) -> None:
     """
     Create directory if it doesn't exist
-    
+
     Args:
         directory: Directory path to create
     """
@@ -59,7 +59,7 @@ def ensure_dir(directory: str) -> None:
 def save_model(model: Any, filepath: str) -> None:
     """
     Save model to disk using pickle
-    
+
     Args:
         model: Model object to save
         filepath: Path to save model
@@ -73,15 +73,15 @@ def save_model(model: Any, filepath: str) -> None:
 def load_model(filepath: str) -> Any:
     """
     Load model from disk
-    
+
     Args:
         filepath: Path to model file
-    
+
     Returns:
         Loaded model object
     """
-    with open(filepath, 'rb') as f:
-        model = pickle.load(f)
+    import joblib
+    model = joblib.load(filepath)
     logging.info(f"Model loaded from {filepath}")
     return model
 
@@ -89,7 +89,7 @@ def load_model(filepath: str) -> Any:
 def save_json(data: Dict, filepath: str) -> None:
     """
     Save dictionary to JSON file
-    
+
     Args:
         data: Dictionary to save
         filepath: Path to save JSON
@@ -103,10 +103,10 @@ def save_json(data: Dict, filepath: str) -> None:
 def load_json(filepath: str) -> Dict:
     """
     Load JSON file
-    
+
     Args:
         filepath: Path to JSON file
-    
+
     Returns:
         Dictionary from JSON
     """
@@ -118,11 +118,11 @@ def load_json(filepath: str) -> Dict:
 def normalize_features(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
     """
     Normalize specified columns to 0-1 range
-    
+
     Args:
         df: DataFrame
         columns: List of column names to normalize
-    
+
     Returns:
         DataFrame with normalized columns
     """
@@ -139,7 +139,7 @@ def normalize_features(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
 def print_section(title: str, emoji: str = "🎵") -> None:
     """
     Print formatted section header
-    
+
     Args:
         title: Section title
         emoji: Emoji to display
@@ -152,10 +152,10 @@ def print_section(title: str, emoji: str = "🎵") -> None:
 def format_track_info(track: Dict) -> str:
     """
     Format track information for display
-    
+
     Args:
         track: Track dictionary
-    
+
     Returns:
         Formatted string
     """
@@ -165,29 +165,29 @@ def format_track_info(track: Dict) -> str:
 def calculate_diversity(recommendations: List[Dict], feature_cols: List[str]) -> float:
     """
     Calculate diversity score of recommendations
-    
+
     Args:
         recommendations: List of recommended tracks
         feature_cols: Features to consider for diversity
-    
+
     Returns:
         Diversity score (0-1, higher is more diverse)
     """
     if len(recommendations) < 2:
         return 1.0
-    
+
     # Extract feature vectors
     features = []
     for track in recommendations:
         feature_vec = [track.get(col, 0) for col in feature_cols]
         features.append(feature_vec)
-    
+
     features = np.array(features)
-    
+
     # Calculate pairwise distances
     from scipy.spatial.distance import pdist
     distances = pdist(features, metric='euclidean')
-    
+
     # Return average distance as diversity score
     return np.mean(distances)
 
@@ -195,15 +195,15 @@ def calculate_diversity(recommendations: List[Dict], feature_cols: List[str]) ->
 def create_sample_dataset(n_samples: int = 1000) -> pd.DataFrame:
     """
     Create synthetic Spotify-like dataset for testing
-    
+
     Args:
         n_samples: Number of samples to generate
-    
+
     Returns:
         DataFrame with synthetic track data
     """
     np.random.seed(42)
-    
+
     data = {
         'track_id': [f'track_{i}' for i in range(n_samples)],
         'name': [f'Song {i}' for i in range(n_samples)],
@@ -219,14 +219,14 @@ def create_sample_dataset(n_samples: int = 1000) -> pd.DataFrame:
         'valence': np.random.random(n_samples),
         'popularity': np.random.randint(0, 100, n_samples)
     }
-    
+
     return pd.DataFrame(data)
 
 
 def get_project_root() -> str:
     """
     Get project root directory
-    
+
     Returns:
         Project root path
     """
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     # Test utilities
     logger = setup_logging()
     logger.info("Utilities module loaded successfully")
-    
+
     # Test config loading
     try:
         config = load_config()

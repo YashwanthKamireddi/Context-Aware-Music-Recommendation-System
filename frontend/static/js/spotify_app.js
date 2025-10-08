@@ -51,14 +51,16 @@ const API = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mood: mood, limit: 20 })
             });
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            
+
             const data = await response.json();
-            showToast(`✅ Found ${data.tracks.length} perfect tracks!`);
-            return data;
+            // Handle both 'tracks' and 'recommendations' response format
+            const tracks = data.tracks || data.recommendations || [];
+            showToast(`✅ Found ${tracks.length} perfect tracks!`);
+            return { ...data, tracks: tracks };
         } catch (error) {
             console.error('Failed to get recommendations:', error);
             showToast('❌ Failed to generate recommendations', 'error');
@@ -85,17 +87,17 @@ function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toastMessage');
     const icon = toast.querySelector('i');
-    
+
     toastMessage.textContent = message;
-    
+
     if (type === 'error') {
         icon.className = 'fas fa-exclamation-circle';
     } else {
         icon.className = 'fas fa-check-circle';
     }
-    
+
     toast.classList.add('show');
-    
+
     setTimeout(() => {
         toast.classList.remove('show');
     }, 3000);
@@ -118,17 +120,17 @@ function switchView(viewName) {
             item.classList.add('active');
         }
     });
-    
+
     // Update views
     document.querySelectorAll('.content-view').forEach(view => {
         view.classList.remove('active');
     });
-    
+
     const targetView = document.getElementById(`${viewName}View`);
     if (targetView) {
         targetView.classList.add('active');
     }
-    
+
     // Update history
     if (state.historyIndex < state.history.length - 1) {
         state.history = state.history.slice(0, state.historyIndex + 1);
@@ -136,14 +138,14 @@ function switchView(viewName) {
     state.history.push(viewName);
     state.historyIndex = state.history.length - 1;
     updateNavButtons();
-    
+
     state.currentView = viewName;
 }
 
 function updateNavButtons() {
     const backBtn = document.getElementById('backBtn');
     const forwardBtn = document.getElementById('forwardBtn');
-    
+
     backBtn.disabled = state.historyIndex <= 0;
     forwardBtn.disabled = state.historyIndex >= state.history.length - 1;
 }
@@ -193,12 +195,12 @@ function getMoodDescription(mood) {
 function displayPlaylist(mood, tracks) {
     state.currentMood = mood;
     state.currentPlaylist = tracks;
-    
+
     // Update playlist header
     document.getElementById('playlistTitle').textContent = getMoodTitle(mood);
     document.getElementById('playlistDescription').textContent = getMoodDescription(mood);
     document.getElementById('playlistCount').textContent = `${tracks.length} songs`;
-    
+
     // Update playlist cover color based on mood
     const playlistCover = document.querySelector('.playlist-cover');
     const gradients = {
@@ -209,20 +211,20 @@ function displayPlaylist(mood, tracks) {
         sleep: 'linear-gradient(135deg, #fa709a, #fee140)'
     };
     playlistCover.style.background = gradients[mood] || gradients.chill;
-    
+
     // Render tracks
     const tracksContainer = document.getElementById('tracksContainer');
     tracksContainer.innerHTML = '';
-    
+
     tracks.forEach((track, index) => {
         const trackRow = createTrackRow(track, index + 1);
         tracksContainer.appendChild(trackRow);
     });
-    
+
     // Switch to playlist view
     document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
     document.getElementById('playlistView').classList.add('active');
-    
+
     // Scroll to top
     document.querySelector('.main-content').scrollTop = 0;
 }
@@ -231,7 +233,7 @@ function createTrackRow(track, number) {
     const row = document.createElement('div');
     row.className = 'track-row';
     row.dataset.trackId = track.id || number;
-    
+
     // Track Number / Play Icon
     const numberCell = document.createElement('div');
     numberCell.className = 'track-number';
@@ -241,14 +243,14 @@ function createTrackRow(track, number) {
             <i class="fas fa-play"></i>
         </div>
     `;
-    
+
     // Track Info (Cover + Name + Artist)
     const infoCell = document.createElement('div');
     infoCell.className = 'track-info';
-    
+
     const coverDiv = document.createElement('div');
     coverDiv.className = 'track-cover';
-    
+
     if (track.album_art && track.album_art !== 'Unknown') {
         const img = document.createElement('img');
         img.src = track.album_art;
@@ -260,77 +262,77 @@ function createTrackRow(track, number) {
     } else {
         coverDiv.innerHTML = '<i class="fas fa-music"></i>';
     }
-    
+
     const detailsDiv = document.createElement('div');
     detailsDiv.className = 'track-details';
     detailsDiv.innerHTML = `
         <div class="track-name">${track.name || 'Unknown Track'}</div>
         <div class="track-artist">${track.artist || 'Unknown Artist'}</div>
     `;
-    
+
     infoCell.appendChild(coverDiv);
     infoCell.appendChild(detailsDiv);
-    
+
     // Track Album
     const albumCell = document.createElement('div');
     albumCell.className = 'track-album';
     const albumName = track.album || 'Unknown Album';
     albumCell.textContent = albumName;
-    
+
     // Track Duration + Score
     const durationCell = document.createElement('div');
     durationCell.className = 'track-duration';
-    
+
     if (track.duration_ms) {
         durationCell.textContent = formatDuration(track.duration_ms);
     }
-    
+
     if (track.score !== undefined) {
         const scoreSpan = document.createElement('span');
         scoreSpan.className = 'track-score';
         scoreSpan.textContent = `${Math.round(track.score * 100)}%`;
         durationCell.appendChild(scoreSpan);
     }
-    
+
     // Assemble row
     row.appendChild(numberCell);
     row.appendChild(infoCell);
     row.appendChild(albumCell);
     row.appendChild(durationCell);
-    
+
     // Click to play
     row.addEventListener('click', () => {
         playTrack(track, number - 1);
     });
-    
+
     return row;
 }
 
 function playTrack(track, index) {
     state.currentTrackIndex = index;
-    
+
     // Update now playing bar
     const nowPlayingCover = document.querySelector('.now-playing-cover');
     const nowPlayingTitle = document.querySelector('.now-playing-title');
     const nowPlayingArtist = document.querySelector('.now-playing-artist');
     const playBtn = document.getElementById('playBtn');
-    
+
     if (track.album_art && track.album_art !== 'Unknown') {
         nowPlayingCover.innerHTML = `<img src="${track.album_art}" alt="${track.name}">`;
     } else {
         nowPlayingCover.innerHTML = '<i class="fas fa-music"></i>';
     }
-    
+
     nowPlayingTitle.textContent = track.name || 'Unknown Track';
     nowPlayingArtist.textContent = track.artist || 'Unknown Artist';
-    
+
     // REAL AUDIO PLAYBACK
     if (track.preview_url) {
         // Initialize audio player if not exists
         if (!state.audioPlayer) {
             state.audioPlayer = new Audio();
             state.audioPlayer.volume = state.currentVolume;
-            
+
             // Auto-advance to next track when preview ends
             state.audioPlayer.addEventListener('ended', () => {
                 if (state.currentPlaylist.length > 0) {
@@ -341,7 +343,7 @@ function playTrack(track, index) {
                     playBtn.querySelector('i').className = 'fas fa-play';
                 }
             });
-            
+
             // Handle playback errors
             state.audioPlayer.addEventListener('error', () => {
                 showToast('⚠️ Preview not available - Opening in Spotify', 'error');
@@ -351,17 +353,17 @@ function playTrack(track, index) {
                 state.isPlaying = false;
                 playBtn.querySelector('i').className = 'fas fa-play';
             });
-            
+
             // Update progress bar as track plays
             state.audioPlayer.addEventListener('timeupdate', updateProgressBar);
-            
+
             // Update total time when loaded
             state.audioPlayer.addEventListener('loadedmetadata', () => {
                 const totalTime = document.getElementById('totalTime');
                 totalTime.textContent = formatDuration(state.audioPlayer.duration * 1000);
             });
         }
-        
+
         // Play the track
         state.audioPlayer.src = track.preview_url;
         state.audioPlayer.play()
@@ -389,16 +391,16 @@ function playTrack(track, index) {
 
 function updateProgressBar() {
     if (!state.audioPlayer) return;
-    
+
     const currentTime = state.audioPlayer.currentTime;
     const duration = state.audioPlayer.duration;
-    
+
     if (!isNaN(duration)) {
         const progressPercent = (currentTime / duration) * 100;
         const progressFill = document.getElementById('progressFill');
         const progressHandle = document.getElementById('progressHandle');
         const currentTimeEl = document.getElementById('currentTime');
-        
+
         progressFill.style.width = `${progressPercent}%`;
         progressHandle.style.left = `${progressPercent}%`;
         currentTimeEl.textContent = formatDuration(currentTime * 1000);
@@ -410,11 +412,11 @@ function updateProgressBar() {
 // ===================================
 async function selectMood(mood) {
     showLoading(true);
-    
+
     const result = await API.getRecommendations(mood);
-    
+
     showLoading(false);
-    
+
     if (result && result.tracks && result.tracks.length > 0) {
         displayPlaylist(mood, result.tracks);
     } else {
@@ -428,7 +430,7 @@ async function selectMood(mood) {
 let searchTimeout;
 async function handleSearch(query) {
     clearTimeout(searchTimeout);
-    
+
     if (!query || query.trim().length < 2) {
         document.getElementById('searchResults').innerHTML = `
             <div class="empty-state">
@@ -439,7 +441,7 @@ async function handleSearch(query) {
         `;
         return;
     }
-    
+
     searchTimeout = setTimeout(async () => {
         const results = await API.searchTracks(query);
         displaySearchResults(results.tracks || []);
@@ -448,7 +450,7 @@ async function handleSearch(query) {
 
 function displaySearchResults(tracks) {
     const resultsContainer = document.getElementById('searchResults');
-    
+
     if (tracks.length === 0) {
         resultsContainer.innerHTML = `
             <div class="empty-state">
@@ -459,15 +461,15 @@ function displaySearchResults(tracks) {
         `;
         return;
     }
-    
+
     resultsContainer.innerHTML = '<div class="tracks-list"></div>';
     const tracksList = resultsContainer.querySelector('.tracks-list');
-    
+
     tracks.forEach((track, index) => {
         const trackRow = createTrackRow(track, index + 1);
         tracksList.appendChild(trackRow);
     });
-    
+
     state.searchResults = tracks;
 }
 
@@ -476,12 +478,12 @@ function displaySearchResults(tracks) {
 // ===================================
 async function initializeApp() {
     showLoading(true);
-    
+
     // Check API health
     const health = await API.checkHealth();
     const statusDot = document.querySelector('.status-dot');
     const statusText = document.querySelector('.status-text');
-    
+
     if (health.status === 'healthy') {
         statusText.textContent = 'Connected';
         statusDot.style.background = 'var(--spotify-green)';
@@ -490,18 +492,18 @@ async function initializeApp() {
         statusDot.style.background = 'var(--essential-negative)';
         showToast('⚠️ Backend connection failed', 'error');
     }
-    
+
     // Load stats
     const stats = await API.getStats();
     if (stats) {
         document.getElementById('statTracks').textContent = stats.total_tracks || '-';
-        document.getElementById('statAccuracy').textContent = 
+        document.getElementById('statAccuracy').textContent =
             stats.model_accuracy ? `${Math.round(stats.model_accuracy * 100)}%` : '99%+';
     }
-    
+
     // Set up event listeners
     setupEventListeners();
-    
+
     // Hide loading screen
     setTimeout(() => {
         showLoading(false);
@@ -517,7 +519,7 @@ function setupEventListeners() {
             if (view) switchView(view);
         });
     });
-    
+
     // Mood cards and links
     document.querySelectorAll('.mood-card, .mood-link').forEach(element => {
         element.addEventListener('click', (e) => {
@@ -526,12 +528,12 @@ function setupEventListeners() {
             if (mood) selectMood(mood);
         });
     });
-    
+
     // Back to home button
     document.getElementById('backToHome').addEventListener('click', () => {
         switchView('home');
     });
-    
+
     // Navigation buttons
     document.getElementById('backBtn').addEventListener('click', () => {
         if (state.historyIndex > 0) {
@@ -542,7 +544,7 @@ function setupEventListeners() {
             updateNavButtons();
         }
     });
-    
+
     document.getElementById('forwardBtn').addEventListener('click', () => {
         if (state.historyIndex < state.history.length - 1) {
             state.historyIndex++;
@@ -552,7 +554,7 @@ function setupEventListeners() {
             updateNavButtons();
         }
     });
-    
+
     // Search
     const globalSearch = document.getElementById('globalSearch');
     globalSearch.addEventListener('input', (e) => {
@@ -561,16 +563,16 @@ function setupEventListeners() {
             switchView('search');
         }
     });
-    
+
     document.getElementById('clearSearch').addEventListener('click', () => {
         globalSearch.value = '';
         handleSearch('');
     });
-    
+
     // Playback controls
     document.getElementById('playBtn').addEventListener('click', () => {
         const icon = document.getElementById('playBtn').querySelector('i');
-        
+
         if (state.audioPlayer && state.audioPlayer.src) {
             if (state.isPlaying) {
                 // PAUSE
@@ -589,37 +591,37 @@ function setupEventListeners() {
             showToast('Select a track to play');
         }
     });
-    
+
     document.getElementById('nextBtn').addEventListener('click', () => {
         if (state.currentPlaylist.length > 0) {
             const nextIndex = (state.currentTrackIndex + 1) % state.currentPlaylist.length;
             playTrack(state.currentPlaylist[nextIndex], nextIndex);
         }
     });
-    
+
     document.getElementById('prevBtn').addEventListener('click', () => {
         if (state.currentPlaylist.length > 0) {
-            const prevIndex = state.currentTrackIndex === 0 
-                ? state.currentPlaylist.length - 1 
+            const prevIndex = state.currentTrackIndex === 0
+                ? state.currentPlaylist.length - 1
                 : state.currentTrackIndex - 1;
             playTrack(state.currentPlaylist[prevIndex], prevIndex);
         }
     });
-    
+
     // Volume control
     const volumeRange = document.getElementById('volumeRange');
     const volumeBtn = document.getElementById('volumeBtn');
-    
+
     volumeRange.addEventListener('input', (e) => {
         const volume = e.target.value;
         const icon = volumeBtn.querySelector('i');
-        
+
         // Update audio player volume
         state.currentVolume = volume / 100;
         if (state.audioPlayer) {
             state.audioPlayer.volume = state.currentVolume;
         }
-        
+
         if (volume == 0) {
             icon.className = 'fas fa-volume-mute';
         } else if (volume < 50) {
@@ -628,7 +630,7 @@ function setupEventListeners() {
             icon.className = 'fas fa-volume-up';
         }
     });
-    
+
     volumeBtn.addEventListener('click', () => {
         const currentVolume = volumeRange.value;
         if (currentVolume > 0) {
@@ -649,18 +651,18 @@ function setupEventListeners() {
             }
         }
     });
-    
+
     // Shuffle and repeat
     document.getElementById('shuffleBtn').addEventListener('click', function() {
         this.classList.toggle('active');
         showToast(this.classList.contains('active') ? '🔀 Shuffle on' : '🔀 Shuffle off');
     });
-    
+
     document.getElementById('repeatBtn').addEventListener('click', function() {
         this.classList.toggle('active');
         showToast(this.classList.contains('active') ? '🔁 Repeat on' : '🔁 Repeat off');
     });
-    
+
     // Progress bar seeking
     const progressBar = document.getElementById('progressBar');
     progressBar.addEventListener('click', (e) => {
@@ -682,7 +684,7 @@ document.addEventListener('DOMContentLoaded', initializeApp);
 function setGreeting() {
     const hour = new Date().getHours();
     const viewTitle = document.querySelector('#homeView .view-title');
-    
+
     if (hour < 12) {
         viewTitle.textContent = 'Good morning';
     } else if (hour < 18) {

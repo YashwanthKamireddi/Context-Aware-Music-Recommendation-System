@@ -1,162 +1,112 @@
+vibe-sync/
 # 🎵 Vibe-Sync: Context-Aware Music Recommendation System
 
-A production-grade machine learning system that provides real-time, mood-based music recommendations by combining user taste profiles with contextual preferences.
+Real LightGBM models trained on 114k Spotify tracks deliver mood-aware playlists in a Spotify-style web UI backed by FastAPI.
 
-## 🎯 Problem Statement
+## 🚀 What’s Included
 
-Traditional music recommendation systems suggest songs based solely on listening history, failing to adapt to users' immediate context or mood. Vibe-Sync bridges this gap by allowing users to select their current vibe (Workout, Chill, Party, Focus, Sleep) and generates highly relevant, situational playlists that match both their taste and mood.
+- **Genuine ML pipeline** – five binary LightGBM classifiers (workout, chill, party, focus, sleep) using only the nine Spotify audio features that ship with the Kaggle dataset.
+- **Real training script** – `train_kaggle_models.py` preprocesses, labels, trains, evaluates, and persists models + scalers + feature lists.
+- **Production FastAPI backend** – serves the React-like frontend, loads the Kaggle data, scores recommendations in vectorized batches, and hydrates album art via Spotify when credentials are supplied.
+- **Modern Spotify-style frontend** – `frontend/` renders dynamic playlists, autoplay previews, and mood cards with live ML scores.
+- **End-to-end tooling** – PowerShell/Windows friendly scripts, reproducible requirements, logging, and model artifacts checked in for immediate use.
 
-## 🚀 Key Features
-
-- **Mood-Based Recommendations**: 5 distinct mood categories (Workout, Chill, Party, Focus, Sleep)
-- **Hybrid Algorithm**: Combines user taste profile (30%) + mood matching (60%) + diversity (10%)
-- **Real-Time Generation**: Instant playlist creation based on current context
-- **Production-Ready**: Clean, modular, scalable architecture
-- **Comprehensive Evaluation**: F1-Score, ROC-AUC, Precision@K metrics
-- **Interactive Demo**: CLI interface for testing recommendations
-
-## 📊 Technical Approach
-
-### ML Pipeline
-1. **Data Processing**: Spotify track dataset with audio features
-2. **Feature Engineering**: Track features + Mood features + Interaction features
-3. **Model Training**: LightGBM classifier with cross-validation
-4. **Evaluation**: Multi-metric assessment with business impact analysis
-5. **Deployment**: Real-time recommendation engine
-
-### Models Used
-- **Baseline**: Logistic Regression
-- **Main Model**: LightGBM Classifier
-- **Optimization**: Hyperparameter tuning via GridSearchCV
-
-### Evaluation Metrics
-- F1-Score (balanced precision/recall)
-- ROC-AUC (classification quality)
-- Precision@K (top-K recommendation accuracy)
-- Business metrics (engagement, diversity)
-
-## 🛠️ Installation
-
-### Prerequisites
-- Python 3.8+
-- pip
-
-### Setup
-```bash
-# Clone the repository
-cd Context-Aware-Music-Recommendation-System
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## 🎮 Usage
-
-### One-Command Execution
-```bash
-# Run complete pipeline (data → train → evaluate → demo)
-python run.py --mode full
-
-# Train models only
-python run.py --mode train
-
-# Launch interactive demo
-python run.py --mode demo
-
-# Evaluate trained models
-python run.py --mode evaluate
-```
-
-### Interactive Demo
-```bash
-python app/main.py
-
-# Select your mood and get instant recommendations!
-```
-
-## 📁 Project Structure
+## 🧱 Project Structure
 
 ```
-vibe-sync/
-├── src/
-│   ├── data_pipeline.py        # Data loading & preprocessing
-│   ├── feature_engineering.py  # Feature creation
-│   ├── model_trainer.py        # Model training & tuning
-│   ├── recommender.py          # Recommendation engine
-│   ├── evaluator.py            # Metrics & evaluation
-│   └── utils.py                # Helper functions
-├── app/
-│   └── main.py                 # Interactive CLI demo
-├── config/
-│   └── config.yaml             # Configuration settings
-├── data/                       # Data storage
-├── models/                     # Saved models
-├── results/                    # Reports & visualizations
-├── run.py                      # Main execution script
+Context-Aware-Music-Recommendation-System/
+├── backend/             # FastAPI server (REST + HTML)
+├── frontend/            # Static assets (templates, JS, CSS)
+├── src/                 # Core ML code (recommender, Spotify client, utils)
+├── models/              # Trained LightGBM + scalers (per mood)
+├── data/                # Kaggle dataset (raw) + processed caches
+├── train_kaggle_models.py
+├── start_server.ps1     # Launches backend with the project virtualenv
 └── requirements.txt
 ```
 
-## 🎵 Mood Categories
+## ⚙️ Setup
 
-| Mood | Characteristics |
-|------|----------------|
-| 🏋️ **Workout** | High energy (>0.7), Fast tempo (>120 BPM), High danceability |
-| 😌 **Chill** | Low energy (<0.5), High acousticness, Calm valence |
-| 🎉 **Party** | High danceability (>0.7), High energy, Positive valence |
-| 📚 **Focus** | Instrumental, Low energy, Minimal vocals |
-| 😴 **Sleep** | Very low energy (<0.3), Acoustic, Slow tempo |
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-## 📈 Results
+### Spotify API (optional but recommended)
 
-Performance metrics will be displayed after training:
-- Model comparison (Logistic Regression vs LightGBM)
-- Feature importance analysis
-- Confusion matrices
-- Sample recommendations with match scores
+Create a `.env` file with:
 
-## 🎯 Business Impact
+```
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+SPOTIFY_REDIRECT_URI=http://localhost:8000/callback
+```
 
-- **User Engagement**: Increased listening time through contextual relevance
-- **Discovery**: Enhanced music exploration aligned with current mood
-- **Retention**: Improved user satisfaction and platform loyalty
-- **Personalization**: Dynamic adaptation to user context
+Without credentials the system still works; album art falls back to a placeholder image.
 
-## 🔬 Technical Details
+## 🧠 Train the ML Models
 
-### Feature Engineering
-- **Track Audio Features**: energy, danceability, valence, tempo, acousticness, etc.
-- **Mood Profile Features**: Aggregated statistics per mood category
-- **Interaction Features**: Difference/ratio between track and mood profile
+```powershell
+.\.venv\Scripts\activate
+python train_kaggle_models.py
+```
 
-### Model Architecture
-- Binary classification per mood category
-- Multi-label capability for hybrid moods
-- Confidence scoring for ranking
+Output (per mood): accuracy, classification report, and artifacts saved to `models/`:
+
+- `{mood}_lightgbm.pkl`
+- `{mood}_scaler.pkl`
+- `{mood}_features.json`
+
+The script automatically renames Kaggle columns (`track_name → name`, etc.) and labels tracks using the mood heuristics defined in `config/config.yaml`.
+
+## 🌐 Run the Web App
+
+```powershell
+.\.venv\Scripts\activate
+./start_server.ps1
+```
+
+Then open http://localhost:8000 and pick a mood. The backend will:
+
+1. Load `data/raw/spotify_tracks.csv` (114,000 tracks).
+2. Vectorize model scoring across the entire dataset (~1 second for all moods).
+3. Fetch album art from Spotify in batches when credentials are available.
+4. Return a JSON payload with scores, audio features, links, and images consumed by the frontend.
+
+## 🤖 Core ML Details
+
+- **Features:** `acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence`
+- **Models:** LightGBM (`n_estimators=100`, `max_depth=5`, `learning_rate=0.1`, `class_weight='balanced'`)
+- **Metrics (test set):** Workout 99.85%, Sleep 99.97%, Party 99.87%, Focus 99.82%, Chill 99.80% accuracy
+- **Serving:** `src/recommender.py` loads scalers/models lazily and ranks candidates using fully vectorized probability scores
+
+## 🛠️ Useful Commands
+
+Run an offline check without starting the server:
+
+```powershell
+.\.venv\Scripts\activate
+python -c "import pandas as pd; from src.recommender import MoodRecommender; from src.utils import load_config; cfg = load_config(); rec = MoodRecommender(cfg); df = pd.read_csv('data/raw/spotify_tracks.csv'); out = rec.recommend(df, mood='workout', top_k=5); print(out[['name','artists','final_score']])"
+```
+
+Inspect the API directly:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/api/recommend" -Method POST -Body '{"mood":"sleep","limit":5}' -ContentType 'application/json'
+```
 
 ## 📝 Configuration
 
-Edit `config/config.yaml` to customize:
-- Data source and size
-- Mood definitions and thresholds
-- Model hyperparameters
-- Evaluation settings
+- `config/config.yaml` – tweak mood thresholds, model weights, dataset paths.
+- `frontend/static/js/spotify_app.js` – UI responses, playback, toast notifications.
+- `backend/server.py` – request handling, album art enrichment, caching strategy.
 
-## 🤝 Contributing
+## 📄 License & Attribution
 
-This is an academic project. Suggestions and improvements are welcome!
-
-## 📄 License
-
-MIT License
-
-## 👨‍💻 Author
-
-Built as a comprehensive ML project demonstrating:
-- Production-grade code architecture
-- Real-world problem solving
-- End-to-end ML pipeline
-- Business impact thinking
+Academic project. Kaggle dataset licensing terms apply. Spotify trademarks remain property of Spotify AB.
 
 ---
 
-**Last Updated**: October 2025
+**Last updated:** October 2025

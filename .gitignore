@@ -33,10 +33,11 @@ ENV/
 *.ipynb
 
 # Data files (large datasets)
-data/raw/*.csv
+# Allow Kaggle datasets - we need these!
+# data/raw/*.csv  ← COMMENTED OUT - we want to commit Kaggle data
 data/raw/*.json
 data/raw/*.zip
-data/processed/*.csv
+# data/processed/*.csv  ← COMMENTED OUT - cache is useful
 
 # Models (can be large)
 models/*.pkl
