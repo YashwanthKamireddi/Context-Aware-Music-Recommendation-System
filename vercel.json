@@ -1,10 +1,5 @@
 {
   "version": 2,
   "buildCommand": "rm -rf public && mkdir -p public && cp -r frontend/* public/",
-  "outputDirectory": "public",
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/static/(.*)", "destination": "/static/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "outputDirectory": "public"
 }
