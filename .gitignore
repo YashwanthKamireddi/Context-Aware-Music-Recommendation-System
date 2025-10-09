@@ -56,6 +56,10 @@ results/*.jpg
 results/*.pdf
 results/reports/*.html
 
+# Frontend build artifacts
+dist/
+public/
+
 # IDE
 .vscode/
 .idea/

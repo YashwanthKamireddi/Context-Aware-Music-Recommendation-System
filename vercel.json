@@ -1,5 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "rm -rf public && mkdir -p public && cp -r frontend/* public/",
-  "outputDirectory": "public"
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ]
 }

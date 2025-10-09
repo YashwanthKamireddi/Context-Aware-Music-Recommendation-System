@@ -1,0 +1,9 @@
+{
+  "name": "context-aware-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ./build-tools/copy-frontend.mjs"
+  }
+}
