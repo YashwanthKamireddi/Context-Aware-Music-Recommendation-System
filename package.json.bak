@@ -1,7 +1,7 @@
 {
   "name": "context-aware-music-recommendation-system",
   "version": "1.0.0",
-  "description": "Context Aware Music Recommendation",
+  "description": "---\r title: Context Aware Music Recommendation\r emoji: 🐠\r colorFrom: green\r colorTo: purple\r sdk: docker\r pinned: false\r license: apache-2.0\r short_description: Mood-based playlists with LightGBM plus FastAPI backend\r ---",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -22,4 +22,3 @@
   },
   "homepage": "https://github.com/YashwanthKamireddi/Context-Aware-Music-Recommendation-System#readme"
 }
-
