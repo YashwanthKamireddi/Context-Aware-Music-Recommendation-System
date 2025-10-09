@@ -45,6 +45,21 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+### Curated dataset for deployments (≤ 1 MB)
+
+Hugging Face Spaces caps individual files at 10 MB, so the FastAPI backend now
+ships with a real-but-curated subset of the Kaggle dump stored at
+`data/processed/tracks_curated.parquet` (~0.8 MB). The file is generated from the
+full dataset using:
+
+```powershell
+python scripts/build_curated_dataset.py
+```
+
+The script performs stratified sampling across the 113 Spotify genres, keeps the
+original audio features, and preserves popular tracks so the ML models receive
+authentic inputs. Re-run it whenever you refresh the raw dataset.
+
 ### Spotify API (optional but recommended)
 
 Create a `.env` file with:
@@ -81,7 +96,8 @@ The script automatically renames Kaggle columns (`track_name → name`, etc.) an
 
 Then open http://localhost:8000 and pick a mood. The backend will:
 
-1. Load `data/raw/spotify_tracks.csv` (114,000 tracks).
+1. Load the curated parquet dataset first (`data/processed/tracks_curated.parquet`),
+   falling back to the full Kaggle CSV or the Spotify API only if needed.
 2. Vectorize model scoring across the entire dataset (~1 second for all moods).
 3. Fetch album art from Spotify in batches when credentials are available.
 4. Return a JSON payload with scores, audio features, links, and images consumed by the frontend.

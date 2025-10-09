@@ -140,7 +140,32 @@ async def recommend_tracks(request: RecommendationRequest):
     try:
         # Load or fetch tracks
         if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 1: Try Kaggle dataset (NO API RATE LIMITS!)
+            # PRIORITY 1: Use curated parquet dataset (production-friendly for Spaces)
+            curated_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_curated.parquet')
+
+            if os.path.exists(curated_path):
+                logger.info(f"📁 Loading curated dataset from {curated_path}...")
+                try:
+                    tracks_df = pd.read_parquet(curated_path)
+
+                    required_features = ['acousticness', 'danceability', 'energy',
+                                       'instrumentalness', 'liveness', 'loudness',
+                                       'speechiness', 'tempo', 'valence']
+
+                    if all(feat in tracks_df.columns for feat in required_features):
+                        if 'album_image' not in tracks_df.columns:
+                            tracks_df['album_image'] = 'https://via.placeholder.com/300x300/1DB954/FFFFFF?text=🎵'
+
+                        logger.info(f"✅ Loaded {len(tracks_df)} tracks from curated dataset")
+                    else:
+                        logger.warning("⚠️ Curated dataset missing required features")
+                        tracks_df = None
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not load curated dataset: {e}")
+                    tracks_df = None
+
+        if tracks_df is None or len(tracks_df) == 0:
+            # PRIORITY 2: Try Kaggle dataset (NO API RATE LIMITS!)
             kaggle_path = os.path.join(parent_dir, 'data', 'raw', 'spotify_tracks.csv')
 
             if os.path.exists(kaggle_path):
@@ -180,7 +205,8 @@ async def recommend_tracks(request: RecommendationRequest):
                     logger.warning(f"⚠️ Could not load Kaggle data: {e}")
                     tracks_df = None
 
-            # PRIORITY 2: Try cached processed data
+        if tracks_df is None or len(tracks_df) == 0:
+            # PRIORITY 3: Try cached processed data
             if tracks_df is None or len(tracks_df) == 0:
                 cached_data_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_labeled.csv')
 
@@ -200,7 +226,8 @@ async def recommend_tracks(request: RecommendationRequest):
                         logger.warning(f"⚠️ Could not load cached data: {e}")
                         tracks_df = None
 
-            # PRIORITY 3: Try bundled lightweight sample dataset (for Spaces deployments)
+        if tracks_df is None or len(tracks_df) == 0:
+            # PRIORITY 4: Try bundled lightweight sample dataset (for Spaces deployments)
             if tracks_df is None or len(tracks_df) == 0:
                 sample_data_path = os.path.join(parent_dir, 'data', 'sample', 'tracks_sample.csv')
 
@@ -223,7 +250,8 @@ async def recommend_tracks(request: RecommendationRequest):
                         logger.warning(f"⚠️ Could not load sample data: {e}")
                         tracks_df = None
 
-            # PRIORITY 4: Fetch from Spotify API (LAST RESORT - rate limits!)
+        if tracks_df is None or len(tracks_df) == 0:
+            # PRIORITY 5: Fetch from Spotify API (LAST RESORT - rate limits!)
             if tracks_df is None or len(tracks_df) == 0:
                 if spotify_client is None:
                     raise HTTPException(
