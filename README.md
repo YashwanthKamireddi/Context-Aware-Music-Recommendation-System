@@ -118,6 +118,7 @@ When you are ready for the cloud:
 
 1. Push the repo (minus the heavyweight datasets) to [Hugging Face Spaces](https://huggingface.co/spaces) and let their Docker runner build the FastAPI backend.
 2. Host the static `frontend/` folder on Vercel with the project root set to `frontend/`. The only build step is copying the directory, so Vercel redeploys automatically whenever `main` updates.
+    - Repo automation: `npm run build` mirrors `frontend/` into a `dist/` folder, and `vercel.json` tells Vercel to publish that bundle via `@vercel/static-build`.
 3. In `frontend/static/config.js`, set `window.API_BASE_URL` to the Space URL (for example `https://yashhugs-context-aware-music-recommendation.hf.space`).
 
 The complete walkthrough (including the lightweight Space mirror command and Vercel linking) lives in `docs/deployment_guide.md`.
