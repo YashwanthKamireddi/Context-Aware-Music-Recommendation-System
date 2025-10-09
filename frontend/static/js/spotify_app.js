@@ -22,19 +22,10 @@ const state = {
 // ===================================
 // API CALLS
 // ===================================
-const API_BASE = (typeof window !== 'undefined' && window.API_BASE_URL ? window.API_BASE_URL : '').replace(/\/$/, '');
-
-function buildApiUrl(path) {
-    if (!path.startsWith('/')) {
-        path = `/${path}`;
-    }
-    return `${API_BASE}${path}`;
-}
-
 const API = {
     async checkHealth() {
         try {
-            const response = await fetch(buildApiUrl('/api/health'));
+            const response = await fetch('/api/health');
             return await response.json();
         } catch (error) {
             console.error('Health check failed:', error);
@@ -44,7 +35,7 @@ const API = {
 
     async getStats() {
         try {
-            const response = await fetch(buildApiUrl('/api/stats'));
+            const response = await fetch('/api/stats');
             return await response.json();
         } catch (error) {
             console.error('Failed to get stats:', error);
@@ -55,7 +46,7 @@ const API = {
     async getRecommendations(mood) {
         try {
             showToast(`🎵 Generating ${mood} recommendations...`);
-            const response = await fetch(buildApiUrl('/api/recommend'), {
+            const response = await fetch('/api/recommend', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mood: mood, limit: 20 })
@@ -79,7 +70,7 @@ const API = {
 
     async searchTracks(query) {
         try {
-            const response = await fetch(buildApiUrl(`/api/search?query=${encodeURIComponent(query)}&limit=20`));
+            const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&limit=20`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return await response.json();
         } catch (error) {

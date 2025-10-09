@@ -36,8 +36,8 @@ RUN useradd -ms /bin/bash vibesync
 USER vibesync
 
 
-ENV PORT=7860
-EXPOSE 7860
+ENV PORT=8000
+EXPOSE 8000
 
-# Start FastAPI via Uvicorn, honoring the PORT provided by the platform (defaults to 7860 for Spaces)
-CMD ["sh", "-c", "uvicorn backend.server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# Start FastAPI via Uvicorn
+CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8000"]
