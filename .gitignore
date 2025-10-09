@@ -56,10 +56,6 @@ results/*.jpg
 results/*.pdf
 results/reports/*.html
 
-# Frontend build artifacts
-dist/
-public/
-
 # IDE
 .vscode/
 .idea/
@@ -73,7 +69,6 @@ Thumbs.db
 
 # Logs
 *.log
-.cache
 
 # Testing
 .pytest_cache/
@@ -83,3 +78,6 @@ htmlcov/
 # Config (if contains sensitive info)
 # config/config.yaml
 .vercel
+dataset.csv
+data/raw/spotify_tracks.csv
+data/processed/tracks_labeled.csv

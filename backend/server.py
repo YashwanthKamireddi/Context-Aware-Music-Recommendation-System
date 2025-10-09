@@ -45,7 +45,6 @@ app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 spotify_client = None
 recommender = None
 tracks_df = None
-tracks_source = None
 
 
 # Pydantic Models
@@ -139,44 +138,15 @@ async def recommend_tracks(request: RecommendationRequest):
         )
 
     try:
-    # Load or fetch tracks
+        # Load or fetch tracks
         if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 1: Use curated parquet dataset (production-friendly for Spaces)
-            curated_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_curated.parquet')
-
-            if os.path.exists(curated_path):
-                logger.info(f"📁 Loading curated dataset from {curated_path}...")
-                try:
-                    tracks_df = pd.read_parquet(curated_path)
-                    tracks_source = 'curated'
-
-                    required_features = ['acousticness', 'danceability', 'energy',
-                                       'instrumentalness', 'liveness', 'loudness',
-                                       'speechiness', 'tempo', 'valence']
-
-                    if all(feat in tracks_df.columns for feat in required_features):
-                        if 'album_image' not in tracks_df.columns:
-                            tracks_df['album_image'] = 'https://via.placeholder.com/300x300/1DB954/FFFFFF?text=🎵'
-
-                        logger.info(f"✅ Loaded {len(tracks_df)} tracks from curated dataset")
-                    else:
-                        logger.warning("⚠️ Curated dataset missing required features")
-                        tracks_df = None
-                        tracks_source = None
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not load curated dataset: {e}")
-                    tracks_df = None
-                    tracks_source = None
-
-        if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 2: Try Kaggle dataset (NO API RATE LIMITS!)
+            # PRIORITY 1: Try Kaggle dataset (NO API RATE LIMITS!)
             kaggle_path = os.path.join(parent_dir, 'data', 'raw', 'spotify_tracks.csv')
 
             if os.path.exists(kaggle_path):
                 logger.info(f"📁 Loading Kaggle dataset from {kaggle_path}...")
                 try:
                     tracks_df = pd.read_csv(kaggle_path, encoding='latin-1')
-                    tracks_source = 'kaggle'
 
                     # Column mapping for Kaggle dataset format
                     column_mapping = {
@@ -210,8 +180,7 @@ async def recommend_tracks(request: RecommendationRequest):
                     logger.warning(f"⚠️ Could not load Kaggle data: {e}")
                     tracks_df = None
 
-        if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 3: Try cached processed data
+            # PRIORITY 2: Try cached processed data
             if tracks_df is None or len(tracks_df) == 0:
                 cached_data_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_labeled.csv')
 
@@ -225,16 +194,13 @@ async def recommend_tracks(request: RecommendationRequest):
 
                         if all(feat in tracks_df.columns for feat in required_features):
                             logger.info(f"✅ Loaded {len(tracks_df)} tracks from cache")
-                            tracks_source = 'processed_cache'
                         else:
                             tracks_df = None
                     except Exception as e:
                         logger.warning(f"⚠️ Could not load cached data: {e}")
                         tracks_df = None
-                        tracks_source = None
 
-        if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 4: Try bundled lightweight sample dataset (for Spaces deployments)
+            # PRIORITY 3: Try bundled lightweight sample dataset (for Spaces deployments)
             if tracks_df is None or len(tracks_df) == 0:
                 sample_data_path = os.path.join(parent_dir, 'data', 'sample', 'tracks_sample.csv')
 
@@ -250,7 +216,6 @@ async def recommend_tracks(request: RecommendationRequest):
                         if available_features:
                             tracks_df = tracks_df.dropna(subset=available_features)
                             logger.info(f"✅ Loaded {len(tracks_df)} tracks from bundled sample dataset")
-                            tracks_source = 'sample'
                         else:
                             logger.warning("⚠️ Sample dataset missing audio features")
                             tracks_df = None
@@ -258,8 +223,7 @@ async def recommend_tracks(request: RecommendationRequest):
                         logger.warning(f"⚠️ Could not load sample data: {e}")
                         tracks_df = None
 
-        if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 5: Fetch from Spotify API (LAST RESORT - rate limits!)
+            # PRIORITY 4: Fetch from Spotify API (LAST RESORT - rate limits!)
             if tracks_df is None or len(tracks_df) == 0:
                 if spotify_client is None:
                     raise HTTPException(
@@ -287,7 +251,7 @@ async def recommend_tracks(request: RecommendationRequest):
                         status_code=500,
                         detail="Failed to load any dataset. Please add Kaggle dataset to data/raw/spotify_tracks.csv"
                     )
-                tracks_source = 'spotify_api'
+
                 logger.info(f"✅ Loaded {len(tracks_df)} tracks from Spotify API")
 
         # Get recommendations
@@ -396,31 +360,6 @@ async def recommend_tracks(request: RecommendationRequest):
     except Exception as e:
         logger.error(f"Error generating recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get('/api/dataset-info')
-async def dataset_info():
-    """Return which dataset is currently loaded and some basic stats."""
-    global tracks_df, tracks_source
-
-    if tracks_df is None or len(tracks_df) == 0:
-        return {"loaded": False, "source": tracks_source, "rows": 0}
-
-    cols = list(tracks_df.columns)
-    return {"loaded": True, "source": tracks_source, "rows": len(tracks_df), "columns": cols}
-
-
-@app.post('/api/reload-dataset')
-async def reload_dataset():
-    """Clear the in-memory dataset so the next request reloads from disk.
-
-    Useful during development when you update `data/processed/tracks_curated.parquet`.
-    """
-    global tracks_df, tracks_source
-    tracks_df = None
-    tracks_source = None
-    logger.info("🔁 In-memory dataset cleared; next request will reload from disk")
-    return {"status": "ok", "message": "dataset cleared"}
 
 
 @app.post("/api/setup-spotify")

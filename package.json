@@ -1,9 +1,24 @@
 {
-  "name": "context-aware-frontend",
+  "name": "context-aware-music-recommendation-system",
   "version": "1.0.0",
-  "private": true,
-  "type": "module",
+  "description": "---\r title: Context Aware Music Recommendation\r emoji: 🐠\r colorFrom: green\r colorTo: purple\r sdk: docker\r pinned: false\r license: apache-2.0\r short_description: Mood-based playlists with LightGBM plus FastAPI backend\r ---",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
   "scripts": {
-    "build": "node ./build-tools/copy-frontend.mjs"
-  }
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YashwanthKamireddi/Context-Aware-Music-Recommendation-System.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/YashwanthKamireddi/Context-Aware-Music-Recommendation-System/issues"
+  },
+  "homepage": "https://github.com/YashwanthKamireddi/Context-Aware-Music-Recommendation-System#readme"
 }
