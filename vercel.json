@@ -1,10 +1,10 @@
 {
-  "builds": [
-    { "src": "frontend/index.html", "use": "@vercel/static" },
-    { "src": "frontend/static/**/*", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/", "dest": "frontend/index.html" },
-    { "src": "/static/(.*)", "dest": "frontend/static/$1" }
+  "version": 2,
+  "buildCommand": "echo 'Static deploy: using frontend directory'",
+  "outputDirectory": "frontend",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/static/(.*)", "destination": "/static/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
