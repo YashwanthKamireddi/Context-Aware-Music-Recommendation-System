@@ -75,6 +75,26 @@ Then open http://localhost:8000 and pick a mood. The backend will:
 3. Fetch album art from Spotify in batches when credentials are available.
 4. Return a JSON payload with scores, audio features, links, and images consumed by the frontend.
 
+## 🐳 Docker & Free Hosting
+
+The repository includes a production `Dockerfile` and `docker-compose.yml` so you can ship the backend without touching virtual environments.
+
+```powershell
+# Build the container
+docker build -t vibesync-backend .
+
+# Run locally with port 8000 exposed
+docker compose up
+```
+
+When you are ready for the cloud:
+
+1. Push the image to your container registry (Docker Hub or GHCR).
+2. Deploy the image on [Koyeb](https://www.koyeb.com/) Micro instances (free tier, no credit card).
+3. Host the static `frontend/` on Vercel and point it at the backend URL.
+
+The complete walkthrough lives in `docs/deployment_guide.md`.
+
 ## 🤖 Core ML Details
 
 - **Features:** `acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence`
@@ -101,6 +121,7 @@ Invoke-RestMethod -Uri "http://localhost:8000/api/recommend" -Method POST -Body 
 
 - `config/config.yaml` – tweak mood thresholds, model weights, dataset paths.
 - `frontend/static/js/spotify_app.js` – UI responses, playback, toast notifications.
+- `frontend/static/config.js` – set `window.API_BASE_URL` when hosting the frontend separately (e.g., on Vercel).
 - `backend/server.py` – request handling, album art enrichment, caching strategy.
 
 ## 📄 License & Attribution
