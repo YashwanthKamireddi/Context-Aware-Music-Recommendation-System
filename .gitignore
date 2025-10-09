@@ -40,9 +40,14 @@ data/raw/*.zip
 # data/processed/*.csv  ← COMMENTED OUT - cache is useful
 
 # Models (can be large)
+# Keep production-ready lightweight inference artifacts under version control
 models/*.pkl
+!models/*_lightgbm.pkl
+!models/*_scaler.pkl
+!models/*_baseline.pkl
 models/*.h5
 models/*.joblib
+!models/*.json
 
 # Results
 results/*.csv

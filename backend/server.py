@@ -200,7 +200,30 @@ async def recommend_tracks(request: RecommendationRequest):
                         logger.warning(f"⚠️ Could not load cached data: {e}")
                         tracks_df = None
 
-            # PRIORITY 3: Fetch from Spotify API (LAST RESORT - rate limits!)
+            # PRIORITY 3: Try bundled lightweight sample dataset (for Spaces deployments)
+            if tracks_df is None or len(tracks_df) == 0:
+                sample_data_path = os.path.join(parent_dir, 'data', 'sample', 'tracks_sample.csv')
+
+                if os.path.exists(sample_data_path):
+                    logger.info(f"📁 Loading sample tracks from {sample_data_path}...")
+                    try:
+                        tracks_df = pd.read_csv(sample_data_path, encoding='utf-8')
+                        required_features = ['acousticness', 'danceability', 'energy',
+                                           'instrumentalness', 'liveness', 'loudness',
+                                           'speechiness', 'tempo', 'valence']
+
+                        available_features = [feat for feat in required_features if feat in tracks_df.columns]
+                        if available_features:
+                            tracks_df = tracks_df.dropna(subset=available_features)
+                            logger.info(f"✅ Loaded {len(tracks_df)} tracks from bundled sample dataset")
+                        else:
+                            logger.warning("⚠️ Sample dataset missing audio features")
+                            tracks_df = None
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not load sample data: {e}")
+                        tracks_df = None
+
+            # PRIORITY 4: Fetch from Spotify API (LAST RESORT - rate limits!)
             if tracks_df is None or len(tracks_df) == 0:
                 if spotify_client is None:
                     raise HTTPException(
