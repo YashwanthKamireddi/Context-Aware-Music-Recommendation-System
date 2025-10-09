@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static deploy: using frontend directory'",
-  "outputDirectory": "frontend",
+  "buildCommand": "rm -rf public && mkdir -p public && cp -r frontend/* public/",
+  "outputDirectory": "public",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/static/(.*)", "destination": "/static/$1" },
