@@ -6,7 +6,7 @@ colorTo: purple
 sdk: docker
 pinned: false
 license: apache-2.0
-short_description: Mood-based playlist generator powered by LightGBM and FastAPI
+short_description: Mood-based playlists with LightGBM plus FastAPI backend
 ---
 
 vibe-sync/
