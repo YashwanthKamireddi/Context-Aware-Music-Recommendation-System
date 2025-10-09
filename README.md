@@ -100,11 +100,11 @@ docker compose up
 
 When you are ready for the cloud:
 
-1. Push the image to your container registry (Docker Hub or GHCR).
-2. Deploy the image on [Koyeb](https://www.koyeb.com/) Micro instances (free tier, no credit card).
-3. Host the static `frontend/` on Vercel and point it at the backend URL.
+1. Push the repo (minus the heavyweight datasets) to [Hugging Face Spaces](https://huggingface.co/spaces) and let their Docker runner build the FastAPI backend.
+2. Host the static `frontend/` folder on Vercel with the project root set to `frontend/`. The only build step is copying the directory, so Vercel redeploys automatically whenever `main` updates.
+3. In `frontend/static/config.js`, set `window.API_BASE_URL` to the Space URL (for example `https://yashhugs-context-aware-music-recommendation.hf.space`).
 
-The complete walkthrough lives in `docs/deployment_guide.md`.
+The complete walkthrough (including the lightweight Space mirror command and Vercel linking) lives in `docs/deployment_guide.md`.
 
 ## 🤖 Core ML Details
 

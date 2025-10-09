@@ -64,6 +64,7 @@ Thumbs.db
 
 # Logs
 *.log
+.cache
 
 # Testing
 .pytest_cache/
@@ -72,3 +73,4 @@ htmlcov/
 
 # Config (if contains sensitive info)
 # config/config.yaml
+.vercel
