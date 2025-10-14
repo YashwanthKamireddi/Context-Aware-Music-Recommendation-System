@@ -1,1 +1,1 @@
-web: python -m uvicorn backend.server:app --host 0.0.0.0 --port $PORT --workers 1
+web: python3 -m uvicorn backend.server:app --host 0.0.0.0 --port $PORT --workers 1
