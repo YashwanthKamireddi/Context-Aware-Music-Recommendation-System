@@ -345,6 +345,49 @@ body {
     text-decoration: underline;
 }
 
+/* Mood Compatibility */
+.mood-compatibility {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mood-score {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-light);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+}
+
+.mood-emoji {
+    font-size: 0.8rem;
+}
+
+.mood-bar {
+    width: 30px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.mood-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+    transition: width 0.3s ease;
+}
+
+.mood-percent {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    min-width: 28px;
+    text-align: right;
+}
+
 /* Stats Section */
 .stats-section {
     margin-top: 60px;

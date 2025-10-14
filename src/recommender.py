@@ -321,6 +321,25 @@ class MoodRecommender:
         # Return top-k
         recommendations = ranked.head(top_k)
 
+        # Calculate multi-mood compatibility scores for top recommendations
+        logger.info("Calculating multi-mood compatibility scores...")
+        multi_mood_scores = []
+        for _, track in recommendations.iterrows():
+            # Extract audio features for this track
+            features = {}
+            for feature in self.audio_features:
+                if feature in track:
+                    features[feature] = track[feature]
+
+            # Get compatibility scores for all moods
+            mood_scores = self.mood_classifier.predict_all_moods(features)
+            multi_mood_scores.append(mood_scores)
+
+        # Add multi-mood scores to recommendations
+        recommendations = recommendations.copy()
+        for i, mood_name in enumerate(self.mood_classifier.moods):
+            recommendations[f'{mood_name}_score'] = [scores[mood_name] for scores in multi_mood_scores]
+
         logger.info(f"Generated {len(recommendations)} recommendations")
         logger.info(f"Average final score: {recommendations['final_score'].mean():.3f}")
 

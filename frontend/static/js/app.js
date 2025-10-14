@@ -191,6 +191,32 @@ function createTrackCard(track, rank) {
 
     const score = Math.round(track.score * 100);
 
+    // Create mood scores display
+    let moodScoresHtml = '';
+    if (track.mood_scores) {
+        const moodEmojis = {
+            'workout': '🏋️',
+            'chill': '😌',
+            'party': '🎉',
+            'focus': '📚',
+            'sleep': '😴'
+        };
+
+        moodScoresHtml = '<div class="mood-compatibility">';
+        for (const [mood, score] of Object.entries(track.mood_scores)) {
+            const percentage = Math.round(score * 100);
+            const emoji = moodEmojis[mood] || '🎵';
+            moodScoresHtml += `<div class="mood-score" title="${mood}: ${percentage}%">
+                <span class="mood-emoji">${emoji}</span>
+                <div class="mood-bar">
+                    <div class="mood-fill" style="width: ${percentage}%"></div>
+                </div>
+                <span class="mood-percent">${percentage}%</span>
+            </div>`;
+        }
+        moodScoresHtml += '</div>';
+    }
+
     card.innerHTML = `
         <div class="track-rank">${rank}</div>
         <div class="track-image">
@@ -203,8 +229,9 @@ function createTrackCard(track, rank) {
                 <div class="score-bar">
                     <div class="score-fill" style="width: ${score}%"></div>
                 </div>
-                <span class="score-text">${score}%</span>
+                <span class="score-text">${score}% match</span>
             </div>
+            ${moodScoresHtml}
             ${track.spotify_url ? `<a href="${track.spotify_url}" target="_blank" class="track-link">Open in Spotify →</a>` : ''}
         </div>
     `;

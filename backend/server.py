@@ -373,6 +373,15 @@ async def recommend_tracks(request: RecommendationRequest):
                 "loudness": float(track.get('loudness', 0))
             }
 
+            # Get multi-mood compatibility scores
+            mood_scores = {}
+            for mood in ['workout', 'chill', 'party', 'focus', 'sleep']:
+                score_col = f'{mood}_score'
+                if score_col in track:
+                    mood_scores[mood] = float(track[score_col])
+                else:
+                    mood_scores[mood] = 0.0
+
             results.append({
                 "id": track_id,
                 "title": track.get('name', 'Unknown Track'),
@@ -382,6 +391,7 @@ async def recommend_tracks(request: RecommendationRequest):
                 "album": album_name,
                 "album_name": album_name,
                 "score": float(track.get('final_score', 0.0)),
+                "mood_scores": mood_scores,
                 "spotify_url": spotify_url,
                 "preview_url": track.get('preview_url', ''),
                 "album_art": album_art,
