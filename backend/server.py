@@ -115,7 +115,7 @@ def load_tracks_dataset():
     if os.path.exists(kaggle_path):
         logger.info(f"📁 Loading Kaggle dataset from {kaggle_path}...")
         try:
-            tracks_df = pd.read_csv(kaggle_path, encoding='latin-1')
+            tracks_df = pd.read_csv(kaggle_path, encoding='utf-8')
 
             # Column mapping for Kaggle dataset format
             column_mapping = {
