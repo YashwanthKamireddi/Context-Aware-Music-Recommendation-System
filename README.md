@@ -159,20 +159,6 @@ python -c "from src.ml_mood_classifier import MLMoodClassifier; clf = MLMoodClas
 - `backend/server.py` – API endpoints, Spotify integration, caching
 - `.env` – Spotify API credentials (create from `.env.example`)
 
-## 🚀 Deployment
-
-### Free Options (No Credit Card Required)
-
-**Railway** - Recommended for production:
-1. Go to [railway.app](https://railway.app)
-2. Connect your GitHub repository
-3. Railway auto-detects Python and deploys
-4. Get your free `*.up.railway.app` URL
-
-**Vercel** - For frontend only:
-1. Go to [vercel.com](https://vercel.com)
-2. Connect repository
-3. Deploy static frontend
 
 ### Local Development
 
