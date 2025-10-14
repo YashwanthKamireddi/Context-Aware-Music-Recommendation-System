@@ -484,9 +484,15 @@ async def get_stats():
 
 if __name__ == "__main__":
     import uvicorn
+    print("🚀 Starting Vibe-Sync server...")
+    print(f"Python version: {sys.version}")
+    print(f"Current working directory: {os.getcwd()}")
+
     config = load_config()
     server_config = config.get('server', {})
     host = os.getenv('HOST', server_config.get('host', '0.0.0.0'))
     port = int(os.getenv('PORT', server_config.get('port', 8004)))
     log_level = server_config.get('log_level', 'info')
+
+    print(f"Host: {host}, Port: {port}, Log level: {log_level}")
     uvicorn.run(app, host=host, port=port, log_level=log_level)
