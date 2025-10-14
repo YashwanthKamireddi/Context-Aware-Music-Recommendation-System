@@ -1,0 +1,7 @@
+{
+  "include": ["src", "backend", "scripts"],
+  "pythonPath": ".venv/Scripts/python.exe",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}
