@@ -96,6 +96,16 @@ body {
     -webkit-text-fill-color: transparent;
 }
 
+.section-description {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin-bottom: 40px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
 /* Cards */
 .card {
     background: var(--surface);
@@ -208,6 +218,12 @@ body {
 
 .results-header h2 {
     font-size: 2rem;
+}
+
+.results-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 5px;
 }
 
 /* Loading */
@@ -413,16 +429,16 @@ body {
     .section-title {
         font-size: 2rem;
     }
-    
+
     .mood-grid {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
-    
+
     .results-header {
         flex-direction: column;
         gap: 20px;
     }
-    
+
     .recommendations-grid {
         grid-template-columns: 1fr;
     }

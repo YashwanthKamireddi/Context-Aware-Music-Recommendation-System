@@ -1,4 +1,7 @@
-# .gitignore for Vibe-Sync
+# Environment variables
+.env
+.env.local
+.env.production
 
 # Python
 __pycache__/
@@ -67,8 +70,9 @@ results/reports/*.html
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
+# Cache files
+.cache
+.cache/
 
 # Testing
 .pytest_cache/

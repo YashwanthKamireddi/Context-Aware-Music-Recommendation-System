@@ -49,7 +49,7 @@ const API = {
             const response = await fetch('/api/recommend', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mood: mood, limit: 20 })
+                body: JSON.stringify({ mood: mood, limit: 50 })
             });
 
             if (!response.ok) {
@@ -70,7 +70,7 @@ const API = {
 
     async searchTracks(query) {
         try {
-            const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&limit=20`);
+            const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&limit=50`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return await response.json();
         } catch (error) {
@@ -527,6 +527,15 @@ function setupEventListeners() {
             const mood = element.dataset.mood;
             if (mood) selectMood(mood);
         });
+    });
+
+    // Play All button
+    document.querySelector('.btn-play-all')?.addEventListener('click', () => {
+        if (state.currentPlaylist.length > 0) {
+            playTrack(state.currentPlaylist[0], 0);
+        } else {
+            showToast('No tracks to play', 'error');
+        }
     });
 
     // Back to home button

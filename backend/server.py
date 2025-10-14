@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from contextlib import asynccontextmanager
 import logging
 import sys
 import os
@@ -26,7 +27,64 @@ from src.utils import load_config, setup_logging
 
 # Setup
 logger = setup_logging()
-app = FastAPI(title="Vibe-Sync API", version="1.0.0")
+
+# Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize services on startup"""
+    global spotify_client, recommender, tracks_df
+
+    try:
+        # Fix SSL certificate path for requests
+        import certifi
+        import os
+        os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
+        os.environ['SSL_CERT_FILE'] = certifi.where()
+
+        # Suppress joblib CPU core detection warning
+        os.environ['LOKY_MAX_CPU_COUNT'] = '4'
+
+        logger.info("🚀 Starting Vibe-Sync API...")
+
+        try:
+            # Try to load Spotify client
+            spotify_client = SpotifyClient()
+            logger.info("✅ Spotify client initialized")
+        except Exception as e:
+            logger.warning(f"⚠️ Spotify client not initialized: {e}")
+            spotify_client = None
+
+        try:
+            # Load recommender
+            config = load_config()
+            recommender = MoodRecommender(config)
+            logger.info("✅ Recommender system loaded")
+        except Exception as e:
+            logger.error(f"❌ Failed to load recommender: {e}")
+            recommender = None
+
+        try:
+            # Load tracks dataset
+            if load_tracks_dataset():
+                logger.info("✅ Tracks dataset loaded")
+            else:
+                logger.warning("⚠️ No tracks dataset available")
+        except Exception as e:
+            logger.error(f"❌ Failed to load tracks dataset: {e}")
+            tracks_df = None
+
+        logger.info("✅ Vibe-Sync API ready!")
+
+    except Exception as e:
+        logger.error(f"❌ Critical error during startup: {e}")
+        raise
+
+    yield
+
+    # Shutdown (if needed)
+    pass
+
+app = FastAPI(title="Vibe-Sync API", version="1.0.0", lifespan=lifespan)
 
 # CORS
 app.add_middleware(
@@ -47,7 +105,128 @@ recommender = None
 tracks_df = None
 
 
-# Pydantic Models
+def load_tracks_dataset():
+    """Load tracks dataset from available sources"""
+    global tracks_df, spotify_client
+
+    # PRIORITY 1: Try Kaggle dataset (NO API RATE LIMITS!)
+    kaggle_path = os.path.join(parent_dir, 'data', 'raw', 'spotify_tracks.csv')
+
+    if os.path.exists(kaggle_path):
+        logger.info(f"📁 Loading Kaggle dataset from {kaggle_path}...")
+        try:
+            tracks_df = pd.read_csv(kaggle_path, encoding='latin-1')
+
+            # Column mapping for Kaggle dataset format
+            column_mapping = {
+                'track_name': 'name',
+                'track_id': 'id',
+                'artist_name': 'artists',
+                'album_name': 'album'
+            }
+
+            for old_col, new_col in column_mapping.items():
+                if old_col in tracks_df.columns:
+                    tracks_df.rename(columns={old_col: new_col}, inplace=True)
+
+            # Add placeholder for album art (Kaggle dataset doesn't have images)
+            if 'album_image' not in tracks_df.columns and 'album_art' not in tracks_df.columns:
+                tracks_df['album_image'] = 'https://via.placeholder.com/300x300.png?text=No+Image'
+
+            # Ensure we have the required audio features
+            required_features = ['acousticness', 'danceability', 'energy',
+                               'instrumentalness', 'liveness', 'loudness',
+                               'speechiness', 'tempo', 'valence']
+
+            if all(feat in tracks_df.columns for feat in required_features):
+                # Clean data
+                tracks_df = tracks_df.dropna(subset=required_features)
+                logger.info(f"✅ Loaded {len(tracks_df)} tracks from Kaggle dataset (NO API LIMITS!)")
+                return True
+            else:
+                logger.warning(f"⚠️ Kaggle data missing features. Has: {list(tracks_df.columns)}")
+                tracks_df = None
+        except Exception as e:
+            logger.warning(f"⚠️ Could not load Kaggle data: {e}")
+            tracks_df = None
+
+    # PRIORITY 2: Try cached processed data
+    if tracks_df is None or len(tracks_df) == 0:
+        cached_data_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_labeled.csv')
+
+        if os.path.exists(cached_data_path):
+            logger.info(f"📁 Loading cached tracks from {cached_data_path}...")
+            try:
+                tracks_df = pd.read_csv(cached_data_path, encoding='latin-1')
+                required_features = ['acousticness', 'danceability', 'energy',
+                                   'instrumentalness', 'liveness', 'loudness',
+                                   'speechiness', 'tempo', 'valence']
+
+                if all(feat in tracks_df.columns for feat in required_features):
+                    logger.info(f"✅ Loaded {len(tracks_df)} tracks from cache")
+                    return True
+                else:
+                    tracks_df = None
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load cached data: {e}")
+                tracks_df = None
+
+    # PRIORITY 3: Try bundled lightweight sample dataset (for Spaces deployments)
+    if tracks_df is None or len(tracks_df) == 0:
+        sample_data_path = os.path.join(parent_dir, 'data', 'sample', 'tracks_sample.csv')
+
+        if os.path.exists(sample_data_path):
+            logger.info(f"📁 Loading sample tracks from {sample_data_path}...")
+            try:
+                tracks_df = pd.read_csv(sample_data_path, encoding='utf-8')
+                required_features = ['acousticness', 'danceability', 'energy',
+                                   'instrumentalness', 'liveness', 'loudness',
+                                   'speechiness', 'tempo', 'valence']
+
+                available_features = [feat for feat in required_features if feat in tracks_df.columns]
+                if available_features:
+                    tracks_df = tracks_df.dropna(subset=available_features)
+                    logger.info(f"✅ Loaded {len(tracks_df)} tracks from bundled sample dataset")
+                    return True
+                else:
+                    logger.warning("⚠️ Sample dataset missing audio features")
+                    tracks_df = None
+            except Exception as e:
+                logger.warning(f"⚠️ Could not load sample data: {e}")
+                tracks_df = None
+
+    # PRIORITY 4: Fetch from Spotify API (LAST RESORT - rate limits!)
+    if tracks_df is None or len(tracks_df) == 0:
+        if spotify_client is None:
+            logger.warning("⚠️ No dataset available and Spotify client not configured")
+            return False
+
+        logger.warning("⚠️ Fetching from Spotify API (may hit rate limits)...")
+
+        genres = [
+            'edm', 'hardstyle', 'metal', 'punk', 'drum-and-bass',
+            'ambient', 'piano', 'classical', 'acoustic', 'meditation',
+            'dance', 'disco', 'house', 'techno', 'funk',
+            'lo-fi', 'study', 'instrumental', 'chillout',
+            'pop', 'rock', 'electronic', 'hip-hop', 'jazz',
+            'r-n-b', 'indie', 'country', 'blues', 'soul'
+        ]
+        try:
+            tracks_df = spotify_client.build_dataset_from_genres(
+                genres,
+                tracks_per_genre=50
+            )
+            if tracks_df is not None and len(tracks_df) > 0:
+                logger.info(f"✅ Loaded {len(tracks_df)} tracks from Spotify API")
+                return True
+        except Exception as e:
+            logger.error(f"❌ Failed to fetch from Spotify API: {e}")
+            tracks_df = None
+
+    return tracks_df is not None and len(tracks_df) > 0
+
+
+# Lifespan
 class RecommendationRequest(BaseModel):
     mood: str
     limit: int = 20
@@ -63,34 +242,6 @@ class PlaylistCreate(BaseModel):
 class SpotifySetup(BaseModel):
     client_id: str
     client_secret: str
-
-
-# Startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup"""
-    global spotify_client, recommender, tracks_df
-
-    logger.info("🚀 Starting Vibe-Sync API...")
-
-    try:
-        # Try to load Spotify client
-        spotify_client = SpotifyClient()
-        logger.info("✅ Spotify client initialized")
-    except Exception as e:
-        logger.warning(f"⚠️ Spotify client not initialized: {e}")
-        spotify_client = None
-
-    try:
-        # Load recommender
-        config = load_config()
-        recommender = MoodRecommender(config)
-        logger.info("✅ Recommender system loaded")
-    except Exception as e:
-        logger.error(f"❌ Failed to load recommender: {e}")
-        recommender = None
-
-    logger.info("✅ Vibe-Sync API ready!")
 
 
 # Routes
@@ -138,121 +289,12 @@ async def recommend_tracks(request: RecommendationRequest):
         )
 
     try:
-        # Load or fetch tracks
+        # Check if tracks are loaded
         if tracks_df is None or len(tracks_df) == 0:
-            # PRIORITY 1: Try Kaggle dataset (NO API RATE LIMITS!)
-            kaggle_path = os.path.join(parent_dir, 'data', 'raw', 'spotify_tracks.csv')
-
-            if os.path.exists(kaggle_path):
-                logger.info(f"📁 Loading Kaggle dataset from {kaggle_path}...")
-                try:
-                    tracks_df = pd.read_csv(kaggle_path, encoding='latin-1')
-
-                    # Column mapping for Kaggle dataset format
-                    column_mapping = {
-                        'track_name': 'name',
-                        'track_id': 'id',
-                        'artist_name': 'artists',
-                        'album_name': 'album'
-                    }
-
-                    for old_col, new_col in column_mapping.items():
-                        if old_col in tracks_df.columns:
-                            tracks_df.rename(columns={old_col: new_col}, inplace=True)
-
-                    # Add placeholder for album art (Kaggle dataset doesn't have images)
-                    if 'album_image' not in tracks_df.columns and 'album_art' not in tracks_df.columns:
-                        tracks_df['album_image'] = 'https://via.placeholder.com/300x300.png?text=No+Image'
-
-                    # Ensure we have the required audio features
-                    required_features = ['acousticness', 'danceability', 'energy',
-                                       'instrumentalness', 'liveness', 'loudness',
-                                       'speechiness', 'tempo', 'valence']
-
-                    if all(feat in tracks_df.columns for feat in required_features):
-                        # Clean data
-                        tracks_df = tracks_df.dropna(subset=required_features)
-                        logger.info(f"✅ Loaded {len(tracks_df)} tracks from Kaggle dataset (NO API LIMITS!)")
-                    else:
-                        logger.warning(f"⚠️ Kaggle data missing features. Has: {list(tracks_df.columns)}")
-                        tracks_df = None
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not load Kaggle data: {e}")
-                    tracks_df = None
-
-            # PRIORITY 2: Try cached processed data
-            if tracks_df is None or len(tracks_df) == 0:
-                cached_data_path = os.path.join(parent_dir, 'data', 'processed', 'tracks_labeled.csv')
-
-                if os.path.exists(cached_data_path):
-                    logger.info(f"📁 Loading cached tracks from {cached_data_path}...")
-                    try:
-                        tracks_df = pd.read_csv(cached_data_path, encoding='latin-1')
-                        required_features = ['acousticness', 'danceability', 'energy',
-                                           'instrumentalness', 'liveness', 'loudness',
-                                           'speechiness', 'tempo', 'valence']
-
-                        if all(feat in tracks_df.columns for feat in required_features):
-                            logger.info(f"✅ Loaded {len(tracks_df)} tracks from cache")
-                        else:
-                            tracks_df = None
-                    except Exception as e:
-                        logger.warning(f"⚠️ Could not load cached data: {e}")
-                        tracks_df = None
-
-            # PRIORITY 3: Try bundled lightweight sample dataset (for Spaces deployments)
-            if tracks_df is None or len(tracks_df) == 0:
-                sample_data_path = os.path.join(parent_dir, 'data', 'sample', 'tracks_sample.csv')
-
-                if os.path.exists(sample_data_path):
-                    logger.info(f"📁 Loading sample tracks from {sample_data_path}...")
-                    try:
-                        tracks_df = pd.read_csv(sample_data_path, encoding='utf-8')
-                        required_features = ['acousticness', 'danceability', 'energy',
-                                           'instrumentalness', 'liveness', 'loudness',
-                                           'speechiness', 'tempo', 'valence']
-
-                        available_features = [feat for feat in required_features if feat in tracks_df.columns]
-                        if available_features:
-                            tracks_df = tracks_df.dropna(subset=available_features)
-                            logger.info(f"✅ Loaded {len(tracks_df)} tracks from bundled sample dataset")
-                        else:
-                            logger.warning("⚠️ Sample dataset missing audio features")
-                            tracks_df = None
-                    except Exception as e:
-                        logger.warning(f"⚠️ Could not load sample data: {e}")
-                        tracks_df = None
-
-            # PRIORITY 4: Fetch from Spotify API (LAST RESORT - rate limits!)
-            if tracks_df is None or len(tracks_df) == 0:
-                if spotify_client is None:
-                    raise HTTPException(
-                        status_code=503,
-                        detail="No dataset available. Please add data/raw/spotify_tracks.csv or configure Spotify API"
-                    )
-
-                logger.warning("⚠️ Fetching from Spotify API (may hit rate limits)...")
-
-                genres = [
-                    'edm', 'hardstyle', 'metal', 'punk', 'drum-and-bass',
-                    'ambient', 'piano', 'classical', 'acoustic', 'meditation',
-                    'dance', 'disco', 'house', 'techno', 'funk',
-                    'lo-fi', 'study', 'instrumental', 'chillout',
-                    'pop', 'rock', 'electronic', 'hip-hop', 'jazz',
-                    'r-n-b', 'indie', 'country', 'blues', 'soul'
-                ]
-                tracks_df = spotify_client.build_dataset_from_genres(
-                    genres,
-                    tracks_per_genre=50
-                )
-
-                if tracks_df.empty:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to load any dataset. Please add Kaggle dataset to data/raw/spotify_tracks.csv"
-                    )
-
-                logger.info(f"✅ Loaded {len(tracks_df)} tracks from Spotify API")
+            raise HTTPException(
+                status_code=503,
+                detail="No tracks dataset available. Please check server startup logs."
+            )
 
         # Get recommendations
         logger.info(f"Generating recommendations for mood: {request.mood}")
@@ -433,7 +475,7 @@ async def get_stats():
     stats = {
         "total_tracks": len(tracks_df) if tracks_df is not None else 0,
         "moods_available": 5,
-        "models_trained": 5 if recommender is not None else 0,
+        "mood_classifier_ready": recommender is not None,
         "spotify_connected": spotify_client is not None
     }
 
@@ -442,4 +484,9 @@ async def get_stats():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    config = load_config()
+    server_config = config.get('server', {})
+    host = os.getenv('HOST', server_config.get('host', '0.0.0.0'))
+    port = int(os.getenv('PORT', server_config.get('port', 8004)))
+    log_level = server_config.get('log_level', 'info')
+    uvicorn.run(app, host=host, port=port, log_level=log_level)

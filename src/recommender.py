@@ -1,5 +1,6 @@
 """
 Recommendation Engine: Real-time mood-based music recommendations
+Using machine learning models for mood classification
 """
 
 import pandas as pd
@@ -7,7 +8,8 @@ import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
 import logging
 
-from src.utils import load_config, setup_logging, load_model
+from src.utils import load_config, setup_logging
+from src.ml_mood_classifier import MLMoodClassifier
 
 
 logger = setup_logging()
@@ -15,12 +17,12 @@ logger = setup_logging()
 
 class MoodRecommender:
     """
-    Real-time recommendation engine for mood-based playlists
+    Real-time recommendation engine using machine learning mood classification
     """
 
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: Optional[Dict] = None):
         """
-        Initialize recommender
+        Initialize recommender with ML mood classifier
 
         Args:
             config: Configuration dictionary
@@ -30,15 +32,17 @@ class MoodRecommender:
         self.recommender_config = self.config['recommender']
         self.audio_features = self.config['features']['audio_features']
 
-        self.models = {}
-        self.scalers = {}
-        self.feature_names = {}
+        # Initialize ML mood classifier
+        self.mood_classifier = MLMoodClassifier(models_dir=self.config['output']['models_dir'])
+
         self._column_mapping = {
             'track_name': 'name',
             'track_id': 'id',
             'artist_name': 'artists',
             'album_name': 'album'
         }
+
+        logger.info("Initialized ML-based mood recommender")
 
     def _prepare_candidates(self, candidates: pd.DataFrame) -> pd.DataFrame:
         """Standardise incoming candidate dataframe so models receive expected columns."""
@@ -80,25 +84,10 @@ class MoodRecommender:
 
     def load_models(self, mood: str) -> None:
         """
-        Load trained models for a mood
-
-        Args:
-            mood: Mood name
+        DEPRECATED: No longer needed with realistic mood classification
+        This method is kept for backward compatibility but does nothing.
         """
-        models_dir = self.config['output']['models_dir']
-
-        try:
-            self.models[mood] = load_model(f"{models_dir}/{mood}_lightgbm.pkl")
-            self.scalers[mood] = load_model(f"{models_dir}/{mood}_scaler.pkl")
-
-            import json
-            with open(f"{models_dir}/{mood}_features.json", 'r') as f:
-                self.feature_names[mood] = json.load(f)
-
-            logger.info(f"Loaded models for {mood}")
-        except Exception as e:
-            logger.error(f"Error loading models for {mood}: {e}")
-            raise
+        logger.info(f"Realistic mood classification - no ML models needed for {mood}")
 
     def create_user_profile(self, user_tracks: pd.DataFrame) -> Dict[str, float]:
         """
@@ -181,23 +170,35 @@ class MoodRecommender:
         return float(max(0.0, min(1.0, similarity)))
 
     def predict_suitability(self, track: pd.Series, mood: str) -> float:
-        """Predict suitability of a single track using the trained ML model."""
-        if mood not in self.models:
-            self.load_models(mood)
+        """
+        Predict suitability using realistic mood classification
 
-        feature_cols = self.feature_names.get(mood, self.audio_features)
-        track_df = pd.DataFrame([track])
+        Args:
+            track: Track features
+            mood: Target mood
 
-        for col in feature_cols:
-            if col not in track_df.columns:
-                track_df[col] = 0.0
+        Returns:
+            Suitability score (0-1) based on mood compatibility
+        """
+        # Convert track series to feature dictionary
+        features = {}
+        for feature in self.audio_features:
+            if feature in track.index:
+                value = track[feature]
+                # Handle scalar values properly
+                if isinstance(value, (int, float)):
+                    features[feature] = float(value)
+                else:
+                    features[feature] = 0.5  # Default value
 
-        track_df = track_df[feature_cols]
-        scaled = self.scalers[mood].transform(track_df.values)
-        scaled_df = pd.DataFrame(scaled, columns=feature_cols)
-        proba = self.models[mood].predict_proba(scaled_df)[:, 1][0]
+        # Get mood scores using ML classification for all moods
+        mood_scores = {}
+        for mood_name in self.mood_config.keys():
+            score = self.mood_classifier.predict_mood(features, mood_name)
+            mood_scores[mood_name] = score
 
-        return float(np.clip(proba, 0.0, 1.0))
+        # Return compatibility score for the target mood
+        return mood_scores.get(mood, 0.0)
 
     def calculate_diversity_penalty(self, track: pd.Series,
                                    selected_tracks: List[pd.Series]) -> float:
@@ -237,7 +238,7 @@ class MoodRecommender:
     def rank_tracks(self, candidates: pd.DataFrame, mood: str,
                    user_profile: Optional[Dict[str, float]] = None) -> pd.DataFrame:
         """
-        Rank candidate tracks for recommendation (FAST VECTORIZED VERSION)
+        Rank candidate tracks using realistic mood classification
 
         Args:
             candidates: DataFrame with candidate tracks
@@ -247,37 +248,32 @@ class MoodRecommender:
         Returns:
             DataFrame with ranked tracks and scores
         """
-        logger.info(f"Ranking {len(candidates)} candidates for {mood}...")
+        logger.info(f"Ranking {len(candidates)} candidates for {mood} using realistic mood classification...")
 
-        # ENSURE models are loaded
-        if mood not in self.models:
-            logger.info(f"Loading models for {mood}...")
-            self.load_models(mood)
+        # Calculate mood compatibility scores using batch prediction for efficiency
+        mood_scores = self.mood_classifier.batch_predict_mood(candidates, mood)
 
-        # FAST VECTORIZED ML PREDICTIONS (process all tracks at once!)
-        logger.info(f"Running ML model predictions on {len(candidates)} tracks...")
-        feature_cols = self.feature_names.get(mood, self.audio_features)
-
-        feature_df = candidates.copy()
-        for col in feature_cols:
-            if col not in feature_df.columns:
-                feature_df[col] = 0.0
-
-        feature_df = feature_df[feature_cols]
-        X_scaled = self.scalers[mood].transform(feature_df.values)
-        X_scaled_df = pd.DataFrame(X_scaled, columns=feature_cols)
-
-        # Get probabilities for ALL tracks at once (FAST!)
-        model_scores = self.models[mood].predict_proba(X_scaled_df)[:, 1]
-        logger.info(f"✅ ML predictions complete! Scores range: {model_scores.min():.3f} to {model_scores.max():.3f}")
-
-        # Use ML model scores directly as the ranking (99%+ accuracy models!)
+        # Create results dataframe
         results_df = candidates.copy()
-        results_df['model_score'] = model_scores
-        results_df['final_score'] = model_scores
+        results_df['mood_score'] = mood_scores
 
-        # Sort by ML model score (highest first)
+        # Calculate user match score if profile available
+        if user_profile:
+            user_scores = []
+            for idx, track in results_df.iterrows():
+                user_score = self.calculate_user_match_score(track, user_profile)
+                user_scores.append(user_score)
+            results_df['user_score'] = user_scores
+
+            # Combine mood and user scores (weighted average)
+            results_df['final_score'] = 0.7 * results_df['mood_score'] + 0.3 * results_df['user_score']
+        else:
+            results_df['final_score'] = results_df['mood_score']
+
+        # Sort by final score (highest first)
         results_df = results_df.sort_values('final_score', ascending=False)
+
+        # Remove duplicates
         if 'id' in results_df.columns:
             results_df = results_df.drop_duplicates(subset=['id'])
         results_df = results_df.reset_index(drop=True)
@@ -287,6 +283,8 @@ class MoodRecommender:
             results_df['track_id'] = results_df['id']
         if 'id' not in results_df.columns and 'track_id' in results_df.columns:
             results_df['id'] = results_df['track_id']
+
+        logger.info(f"✅ Realistic mood ranking complete! Score range: {results_df['final_score'].min():.3f} to {results_df['final_score'].max():.3f}")
 
         return results_df
 
@@ -356,7 +354,8 @@ if __name__ == "__main__":
         print(f"Top 10 Recommendations for {mood.upper()}")
         print(f"{'='*60}\n")
         print(recommendations[['name', 'artists', 'final_score']].to_string(index=False))
-        print("\n✅ Recommendation test completed!")
+        print("\n✅ Realistic mood-based recommendation test completed!")
+        print("   Scores represent mood compatibility (0-1 scale)")
     except Exception as e:
         logger.warning(f"Could not test with models (not trained yet): {e}")
         logger.info("Run full pipeline first to train models")

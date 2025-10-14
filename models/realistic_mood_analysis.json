@@ -1,0 +1,27 @@
+{
+  "workout": {
+    "avg_score": 0.6111038995679541,
+    "high_score_percentage": 78.48771929824562,
+    "primary_mood_percentage": 34.98684210526316
+  },
+  "sleep": {
+    "avg_score": 0.21277916987392995,
+    "high_score_percentage": 6.63421052631579,
+    "primary_mood_percentage": 2.8175438596491227
+  },
+  "party": {
+    "avg_score": 0.5899157630421719,
+    "high_score_percentage": 74.3719298245614,
+    "primary_mood_percentage": 31.071929824561405
+  },
+  "focus": {
+    "avg_score": 0.44326477447569906,
+    "high_score_percentage": 34.77280701754386,
+    "primary_mood_percentage": 17.07894736842105
+  },
+  "chill": {
+    "avg_score": 0.4000647490487707,
+    "high_score_percentage": 34.02368421052632,
+    "primary_mood_percentage": 14.044736842105262
+  }
+}
