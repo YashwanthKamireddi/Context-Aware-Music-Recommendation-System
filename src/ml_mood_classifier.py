@@ -31,7 +31,18 @@ class MLMoodClassifier:
         Args:
             models_dir: Directory containing trained models and scalers
         """
-        self.models_dir = models_dir
+        # Resolve models directory to absolute path
+        if not os.path.isabs(models_dir):
+            # Get the directory containing this script (src/)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # Go up one level to project root
+            project_root = os.path.dirname(script_dir)
+            self.models_dir = os.path.join(project_root, models_dir)
+        else:
+            self.models_dir = models_dir
+
+        logger.info(f"Using models directory: {self.models_dir}")
+
         self.models = {}
         self.scalers = {}
         self.feature_columns = {}
