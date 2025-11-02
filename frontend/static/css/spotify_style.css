@@ -58,6 +58,10 @@
     box-sizing: border-box;
 }
 
+.hidden {
+    display: none !important;
+}
+
 body {
     font-family: var(--font-family);
     background: var(--bg-base);
@@ -754,8 +758,133 @@ input {
     transform: scale(1.05);
 }
 
+.btn-save.active {
+    color: var(--spotify-green);
+}
+
+.btn-save.active i {
+    color: var(--spotify-green);
+}
+
 .playlist-tracks {
     padding: 0 32px 32px;
+}
+
+/* ===================================
+   LIBRARY VIEW
+   =================================== */
+.library-content {
+    padding: 0 32px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.library-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.library-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: var(--bg-highlight);
+    box-shadow: var(--shadow-sm);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.library-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-md);
+}
+
+.library-card-bg {
+    position: absolute;
+    top: -40px;
+    left: -40px;
+    right: -40px;
+    height: 160px;
+    filter: blur(60px);
+    opacity: 0.75;
+}
+
+.library-card-content {
+    position: relative;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: linear-gradient(160deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.9) 60%);
+    backdrop-filter: blur(20px);
+    min-height: 220px;
+}
+
+.library-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-subdued);
+}
+
+.library-card-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text-base);
+}
+
+.library-card-description {
+    color: var(--text-subdued);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.library-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.library-card-count {
+    font-size: 13px;
+    color: var(--text-subdued);
+}
+
+.library-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.library-card-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    transition: var(--transition-fast);
+}
+
+.library-card-btn i {
+    font-size: 12px;
+}
+
+.library-card-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
 }
 
 .tracks-header {
@@ -1026,6 +1155,20 @@ input {
     color: var(--spotify-green);
 }
 
+.control-btn.repeat-one {
+    position: relative;
+}
+
+.control-btn.repeat-one::after {
+    content: '1';
+    position: absolute;
+    font-size: 10px;
+    font-weight: 700;
+    bottom: 6px;
+    right: 6px;
+    color: var(--spotify-green);
+}
+
 .control-btn-play {
     width: 40px;
     height: 40px;
@@ -1129,11 +1272,23 @@ input {
 .volume-slider input[type="range"] {
     width: 100%;
     height: 4px;
-    background: rgba(61, 202, 110, 0.3);
+    background: linear-gradient(90deg, rgba(255,255,255,0.9) 70%, rgba(255,255,255,0.2) 70%);
     border-radius: 2px;
     outline: none;
     -webkit-appearance: none;
     appearance: none;
+}
+
+.volume-slider input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: transparent;
+}
+
+.volume-slider input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: transparent;
 }
 
 .volume-slider input[type="range"]::-webkit-slider-thumb {
@@ -1141,18 +1296,21 @@ input {
     appearance: none;
     width: 12px;
     height: 12px;
-    background: #1DB954;
+    background: #FFFFFF;
     border-radius: 50%;
     cursor: pointer;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
 }
 
 .volume-slider input[type="range"]::-moz-range-thumb {
     width: 12px;
     height: 12px;
-    background: #1DB954;
+    background: #FFFFFF;
     border-radius: 50%;
     cursor: pointer;
-    border: none;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
 }
 
 /* ===================================

@@ -55,6 +55,35 @@
                 </div>
             </section>
 
+            <!-- Hero Section -->
+            <section class="hero-section">
+                <div class="hero-content">
+                    <h2>Find the soundtrack that matches your context</h2>
+                    <p>Blend realistic mood labels with machine learning scores to surface playlists that feel intentional, not random. Tap into Spotify data or local datasets in seconds.</p>
+                    <div class="hero-actions">
+                        <button id="explore-btn" class="btn btn-primary">Explore moods</button>
+                        <div class="status-pill" id="model-status-pill">
+                            <span class="status-indicator" id="model-status-indicator"></span>
+                            <span id="model-status-text">Checking models...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-metrics">
+                    <div class="metric-card">
+                        <span class="metric-value" id="hero-tracks">-</span>
+                        <span class="metric-label">Tracks scored</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-value" id="hero-ready">Loading</span>
+                        <span class="metric-label">Model readiness</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-value">5</span>
+                        <span class="metric-label">Moods covered</span>
+                    </div>
+                </div>
+            </section>
+
             <!-- Mood Selection Section -->
             <section id="mood-section" class="mood-section">
                 <h2 class="section-title">Select Your Vibe</h2>
@@ -96,9 +125,14 @@
             <!-- Results Section -->
             <section id="results-section" class="results-section hidden">
                 <div class="results-header">
-                    <h2>Your Personalized Playlist</h2>
-                    <p class="results-description">Tracks ranked by mood compatibility score</p>
-                    <button id="back-btn" class="btn btn-secondary">← Back</button>
+                    <div class="results-title">
+                        <h2 id="results-title">Your Personalized Playlist</h2>
+                        <p class="results-description" id="results-subtitle">Tracks ranked by mood compatibility score</p>
+                    </div>
+                    <div class="results-actions">
+                        <span class="results-pill hidden" id="selected-mood-pill">Mood: -</span>
+                        <button id="back-btn" class="btn btn-secondary">← Back</button>
+                    </div>
                 </div>
 
                 <div id="loading" class="loading hidden">

@@ -460,17 +460,25 @@ async def search_tracks(query: str, limit: int = 20):
 
         results = []
         for track in tracks:
-            results.append({
+            album_images = track['album']['images'] if track['album'] and 'images' in track['album'] else []
+            image_url = album_images[0]['url'] if album_images else ''
+
+            track_payload = {
                 "id": track['id'],
                 "name": track['name'],
                 "artist": ', '.join([a['name'] for a in track['artists']]),
                 "album": track['album']['name'],
                 "spotify_url": f"https://open.spotify.com/track/{track['id']}",
                 "preview_url": track.get('preview_url', ''),
-                "image": track['album']['images'][0]['url'] if track['album']['images'] else ''
-            })
+                "duration_ms": track.get('duration_ms', 0) or 0,
+                "album_art": image_url,
+                "album_image": image_url
+            }
 
-        return {"results": results}
+            results.append(track_payload)
+
+        # Backwards compatibility: expose both keys for the frontend and API consumers
+        return {"tracks": results, "results": results}
 
     except Exception as e:
         logger.error(f"Search error: {e}")

@@ -16,8 +16,20 @@ const state = {
     history: [],
     historyIndex: -1,
     audioPlayer: null, // HTML5 Audio element
-    currentVolume: 0.7
+    currentVolume: 0.7,
+    shuffleEnabled: false,
+    repeatMode: 'off', // off | all | one
+    libraryPlaylists: []
 };
+
+function updateVolumeSliderUI(rangeElement) {
+    if (!rangeElement) return;
+    const min = Number(rangeElement.min || 0);
+    const max = Number(rangeElement.max || 100);
+    const value = Number(rangeElement.value);
+    const percentage = ((value - min) / (max - min)) * 100;
+    rangeElement.style.background = `linear-gradient(90deg, rgba(255,255,255,0.95) ${percentage}%, rgba(255,255,255,0.2) ${percentage}%)`;
+}
 
 // ===================================
 // API CALLS
@@ -113,6 +125,13 @@ function showLoading(show = true) {
 }
 
 function switchView(viewName) {
+    if (state.currentView === viewName) {
+        if (viewName === 'library') {
+            renderLibrary();
+        }
+        return;
+    }
+
     // Update nav items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
@@ -140,6 +159,10 @@ function switchView(viewName) {
     updateNavButtons();
 
     state.currentView = viewName;
+
+    if (viewName === 'library') {
+        renderLibrary();
+    }
 }
 
 function updateNavButtons() {
@@ -189,6 +212,179 @@ function getMoodDescription(mood) {
     return descriptions[mood] || 'AI-curated tracks for your mood';
 }
 
+function getMoodGradient(mood) {
+    const gradients = {
+        workout: 'linear-gradient(135deg, #ff6b6b, #ee5a6f)',
+        chill: 'linear-gradient(135deg, #4facfe, #00f2fe)',
+        party: 'linear-gradient(135deg, #f093fb, #f5576c)',
+        focus: 'linear-gradient(135deg, #43e97b, #38f9d7)',
+        sleep: 'linear-gradient(135deg, #fa709a, #fee140)'
+    };
+    return gradients[mood] || gradients.chill;
+}
+
+function createPlaylistKey(mood, tracks) {
+    const ids = tracks.map(track => track.id || track.name || '').join('|');
+    return `${mood || 'unknown'}:${ids}`;
+}
+
+function isCurrentPlaylistSaved() {
+    if (!state.currentPlaylist.length) return false;
+    const key = createPlaylistKey(state.currentMood, state.currentPlaylist);
+    return state.libraryPlaylists.some(playlist => playlist.key === key);
+}
+
+function updateSaveButtonState() {
+    const saveBtn = document.querySelector('.btn-save');
+    if (!saveBtn) return;
+
+    const icon = saveBtn.querySelector('i');
+    const isSaved = isCurrentPlaylistSaved();
+
+    if (isSaved) {
+        saveBtn.classList.add('active');
+        if (icon) icon.className = 'fas fa-heart';
+    } else {
+        saveBtn.classList.remove('active');
+        if (icon) icon.className = 'far fa-heart';
+    }
+}
+
+function persistLibrary() {
+    try {
+        localStorage.setItem('vibesync_library_v1', JSON.stringify(state.libraryPlaylists));
+    } catch (error) {
+        console.warn('Failed to persist library:', error);
+    }
+}
+
+function loadLibraryFromStorage() {
+    try {
+        const raw = localStorage.getItem('vibesync_library_v1');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            state.libraryPlaylists = parsed;
+        }
+    } catch (error) {
+        console.warn('Failed to load library:', error);
+        state.libraryPlaylists = [];
+    }
+}
+
+function formatRelativeDate(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) return 'Saved today';
+    if (diffDays === 1) return 'Saved yesterday';
+    if (diffDays < 7) return `Saved ${diffDays} days ago`;
+
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return `Saved ${date.toLocaleDateString(undefined, options)}`;
+}
+
+function renderLibrary() {
+    const container = document.getElementById('libraryContainer');
+    const emptyState = document.getElementById('libraryEmptyState');
+
+    if (!container || !emptyState) return;
+
+    container.innerHTML = '';
+
+    if (!state.libraryPlaylists.length) {
+        container.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    emptyState.classList.add('hidden');
+
+    state.libraryPlaylists
+        .slice()
+        .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt))
+        .forEach(playlist => {
+            const card = document.createElement('div');
+            card.className = 'library-card';
+            card.dataset.id = playlist.id;
+            card.innerHTML = `
+                <div class="library-card-bg" style="background: ${getMoodGradient(playlist.mood)}"></div>
+                <div class="library-card-content">
+                    <div class="library-card-heading">
+                        <span class="library-card-type">${getMoodTitle(playlist.mood)}</span>
+                        <span class="library-card-meta">${formatRelativeDate(playlist.savedAt)}</span>
+                    </div>
+                    <h3 class="library-card-title">${playlist.title}</h3>
+                    <p class="library-card-description">${playlist.description}</p>
+                    <div class="library-card-footer">
+                        <span class="library-card-count">${playlist.tracks.length} songs</span>
+                        <div class="library-card-actions">
+                            <button class="library-card-btn" data-action="play" data-id="${playlist.id}">
+                                <i class="fas fa-play"></i>
+                                Play
+                            </button>
+                            <button class="library-card-btn" data-action="delete" data-id="${playlist.id}">
+                                <i class="fas fa-trash"></i>
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+}
+
+function getNextTrackIndex(direction = 1) {
+    const total = state.currentPlaylist.length;
+    if (!total) return -1;
+
+    if (direction === 1) {
+        if (state.repeatMode === 'one') {
+            return state.currentTrackIndex;
+        }
+
+        if (state.shuffleEnabled) {
+            const candidates = state.currentPlaylist
+                .map((_, idx) => idx)
+                .filter(idx => idx !== state.currentTrackIndex);
+
+            if (candidates.length === 0) {
+                return state.repeatMode === 'off' ? -1 : state.currentTrackIndex;
+            }
+            const randomIndex = Math.floor(Math.random() * candidates.length);
+            return candidates[randomIndex];
+        }
+
+        const nextIndex = state.currentTrackIndex + 1;
+        if (nextIndex < total) return nextIndex;
+        return state.repeatMode === 'all' ? 0 : -1;
+    }
+
+    // direction === -1
+    if (state.shuffleEnabled) {
+        const candidates = state.currentPlaylist
+            .map((_, idx) => idx)
+            .filter(idx => idx !== state.currentTrackIndex);
+
+        if (candidates.length === 0) {
+            return state.repeatMode === 'off' ? -1 : state.currentTrackIndex;
+        }
+        const randomIndex = Math.floor(Math.random() * candidates.length);
+        return candidates[randomIndex];
+    }
+
+    const prevIndex = state.currentTrackIndex - 1;
+    if (prevIndex >= 0) return prevIndex;
+    return state.repeatMode === 'all' ? total - 1 : 0;
+}
+
 // ===================================
 // PLAYLIST RENDERING
 // ===================================
@@ -203,14 +399,7 @@ function displayPlaylist(mood, tracks) {
 
     // Update playlist cover color based on mood
     const playlistCover = document.querySelector('.playlist-cover');
-    const gradients = {
-        workout: 'linear-gradient(135deg, #ff6b6b, #ee5a6f)',
-        chill: 'linear-gradient(135deg, #4facfe, #00f2fe)',
-        party: 'linear-gradient(135deg, #f093fb, #f5576c)',
-        focus: 'linear-gradient(135deg, #43e97b, #38f9d7)',
-        sleep: 'linear-gradient(135deg, #fa709a, #fee140)'
-    };
-    playlistCover.style.background = gradients[mood] || gradients.chill;
+    playlistCover.style.background = getMoodGradient(mood);
 
     // Render tracks
     const tracksContainer = document.getElementById('tracksContainer');
@@ -221,9 +410,10 @@ function displayPlaylist(mood, tracks) {
         tracksContainer.appendChild(trackRow);
     });
 
-    // Switch to playlist view
-    document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
-    document.getElementById('playlistView').classList.add('active');
+    updateSaveButtonState();
+
+    // Switch to playlist view with history support
+    switchView('playlist');
 
     // Scroll to top
     document.querySelector('.main-content').scrollTop = 0;
@@ -326,6 +516,8 @@ function playTrack(track, index) {
     nowPlayingTitle.textContent = track.name || 'Unknown Track';
     nowPlayingArtist.textContent = track.artist || 'Unknown Artist';
 
+    resetProgressBar();
+
     // REAL AUDIO PLAYBACK
     if (track.preview_url) {
         // Initialize audio player if not exists
@@ -335,13 +527,22 @@ function playTrack(track, index) {
 
             // Auto-advance to next track when preview ends
             state.audioPlayer.addEventListener('ended', () => {
-                if (state.currentPlaylist.length > 0) {
-                    const nextIndex = (state.currentTrackIndex + 1) % state.currentPlaylist.length;
-                    playTrack(state.currentPlaylist[nextIndex], nextIndex);
-                } else {
+                if (!state.currentPlaylist.length) {
                     state.isPlaying = false;
                     playBtn.querySelector('i').className = 'fas fa-play';
+                    resetProgressBar();
+                    return;
                 }
+
+                const nextIndex = getNextTrackIndex(1);
+                if (nextIndex === -1) {
+                    state.isPlaying = false;
+                    playBtn.querySelector('i').className = 'fas fa-play';
+                    resetProgressBar();
+                    return;
+                }
+
+                playTrack(state.currentPlaylist[nextIndex], nextIndex);
             });
 
             // Handle playback errors
@@ -405,6 +606,16 @@ function updateProgressBar() {
         progressHandle.style.left = `${progressPercent}%`;
         currentTimeEl.textContent = formatDuration(currentTime * 1000);
     }
+}
+
+function resetProgressBar() {
+    const progressFill = document.getElementById('progressFill');
+    const progressHandle = document.getElementById('progressHandle');
+    const currentTimeEl = document.getElementById('currentTime');
+
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressHandle) progressHandle.style.left = '0%';
+    if (currentTimeEl) currentTimeEl.textContent = '0:00';
 }
 
 // ===================================
@@ -504,6 +715,15 @@ async function initializeApp() {
     // Set up event listeners
     setupEventListeners();
 
+    loadLibraryFromStorage();
+    renderLibrary();
+    updateSaveButtonState();
+
+    state.history = ['home'];
+    state.historyIndex = 0;
+    state.currentView = 'home';
+    updateNavButtons();
+
     // Hide loading screen
     setTimeout(() => {
         showLoading(false);
@@ -538,6 +758,40 @@ function setupEventListeners() {
         }
     });
 
+    const saveBtn = document.querySelector('.btn-save');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            if (!state.currentPlaylist.length) {
+                showToast('Generate a playlist first', 'error');
+                return;
+            }
+
+            const key = createPlaylistKey(state.currentMood, state.currentPlaylist);
+            const existingIndex = state.libraryPlaylists.findIndex(item => item.key === key);
+
+            if (existingIndex >= 0) {
+                state.libraryPlaylists.splice(existingIndex, 1);
+                showToast('Removed from Your Library');
+            } else {
+                const playlistSnapshot = state.currentPlaylist.map(track => JSON.parse(JSON.stringify(track)));
+                state.libraryPlaylists.push({
+                    id: `pl-${Date.now()}`,
+                    key,
+                    mood: state.currentMood,
+                    title: getMoodTitle(state.currentMood),
+                    description: getMoodDescription(state.currentMood),
+                    tracks: playlistSnapshot,
+                    savedAt: new Date().toISOString()
+                });
+                showToast('Saved to Your Library');
+            }
+
+            persistLibrary();
+            renderLibrary();
+            updateSaveButtonState();
+        });
+    }
+
     // Back to home button
     document.getElementById('backToHome').addEventListener('click', () => {
         switchView('home');
@@ -550,7 +804,19 @@ function setupEventListeners() {
             const view = state.history[state.historyIndex];
             document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
             document.getElementById(`${view}View`).classList.add('active');
+
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.view === view);
+            });
+
+            state.currentView = view;
             updateNavButtons();
+
+            if (view === 'library') {
+                renderLibrary();
+            } else if (view === 'playlist') {
+                updateSaveButtonState();
+            }
         }
     });
 
@@ -560,7 +826,18 @@ function setupEventListeners() {
             const view = state.history[state.historyIndex];
             document.querySelectorAll('.content-view').forEach(v => v.classList.remove('active'));
             document.getElementById(`${view}View`).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.view === view);
+            });
+
+            state.currentView = view;
             updateNavButtons();
+
+            if (view === 'library') {
+                renderLibrary();
+            } else if (view === 'playlist') {
+                updateSaveButtonState();
+            }
         }
     });
 
@@ -603,16 +880,22 @@ function setupEventListeners() {
 
     document.getElementById('nextBtn').addEventListener('click', () => {
         if (state.currentPlaylist.length > 0) {
-            const nextIndex = (state.currentTrackIndex + 1) % state.currentPlaylist.length;
+            const nextIndex = getNextTrackIndex(1);
+            if (nextIndex === -1) {
+                showToast('End of playlist');
+                return;
+            }
             playTrack(state.currentPlaylist[nextIndex], nextIndex);
         }
     });
 
     document.getElementById('prevBtn').addEventListener('click', () => {
         if (state.currentPlaylist.length > 0) {
-            const prevIndex = state.currentTrackIndex === 0
-                ? state.currentPlaylist.length - 1
-                : state.currentTrackIndex - 1;
+            const prevIndex = getNextTrackIndex(-1);
+            if (prevIndex === -1) {
+                showToast('Start of playlist');
+                return;
+            }
             playTrack(state.currentPlaylist[prevIndex], prevIndex);
         }
     });
@@ -620,6 +903,8 @@ function setupEventListeners() {
     // Volume control
     const volumeRange = document.getElementById('volumeRange');
     const volumeBtn = document.getElementById('volumeBtn');
+
+    updateVolumeSliderUI(volumeRange);
 
     volumeRange.addEventListener('input', (e) => {
         const volume = e.target.value;
@@ -630,6 +915,8 @@ function setupEventListeners() {
         if (state.audioPlayer) {
             state.audioPlayer.volume = state.currentVolume;
         }
+
+        updateVolumeSliderUI(volumeRange);
 
         if (volume == 0) {
             icon.className = 'fas fa-volume-mute';
@@ -650,6 +937,7 @@ function setupEventListeners() {
             if (state.audioPlayer) {
                 state.audioPlayer.volume = 0;
             }
+            updateVolumeSliderUI(volumeRange);
         } else {
             const lastVolume = volumeRange.dataset.lastVolume || 70;
             volumeRange.value = lastVolume;
@@ -658,18 +946,36 @@ function setupEventListeners() {
             if (state.audioPlayer) {
                 state.audioPlayer.volume = state.currentVolume;
             }
+            updateVolumeSliderUI(volumeRange);
         }
     });
 
     // Shuffle and repeat
-    document.getElementById('shuffleBtn').addEventListener('click', function() {
-        this.classList.toggle('active');
-        showToast(this.classList.contains('active') ? '🔀 Shuffle on' : '🔀 Shuffle off');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    shuffleBtn.addEventListener('click', function() {
+        state.shuffleEnabled = !state.shuffleEnabled;
+        this.classList.toggle('active', state.shuffleEnabled);
+        showToast(state.shuffleEnabled ? '🔀 Shuffle on' : '🔀 Shuffle off');
     });
 
-    document.getElementById('repeatBtn').addEventListener('click', function() {
-        this.classList.toggle('active');
-        showToast(this.classList.contains('active') ? '🔁 Repeat on' : '🔁 Repeat off');
+    const repeatBtn = document.getElementById('repeatBtn');
+    const repeatModes = ['off', 'all', 'one'];
+    repeatBtn.addEventListener('click', function() {
+        const currentIndex = repeatModes.indexOf(state.repeatMode);
+        const nextMode = repeatModes[(currentIndex + 1) % repeatModes.length];
+        state.repeatMode = nextMode;
+
+        this.classList.remove('active', 'repeat-one');
+
+        if (nextMode === 'all') {
+            this.classList.add('active');
+            showToast('🔁 Repeat all');
+        } else if (nextMode === 'one') {
+            this.classList.add('active', 'repeat-one');
+            showToast('� Repeat one');
+        } else {
+            showToast('Repeat off');
+        }
     });
 
     // Progress bar seeking
@@ -682,6 +988,29 @@ function setupEventListeners() {
             state.audioPlayer.currentTime = state.audioPlayer.duration * percent;
         }
     });
+
+    const libraryContainer = document.getElementById('libraryContainer');
+    if (libraryContainer) {
+        libraryContainer.addEventListener('click', (event) => {
+            const actionBtn = event.target.closest('[data-action]');
+            if (!actionBtn) return;
+
+            const playlistId = actionBtn.dataset.id;
+            const playlist = state.libraryPlaylists.find(item => item.id === playlistId);
+            if (!playlist) return;
+
+            if (actionBtn.dataset.action === 'play') {
+                displayPlaylist(playlist.mood, playlist.tracks);
+                showToast('Loaded saved playlist');
+            } else if (actionBtn.dataset.action === 'delete') {
+                state.libraryPlaylists = state.libraryPlaylists.filter(item => item.id !== playlistId);
+                persistLibrary();
+                renderLibrary();
+                updateSaveButtonState();
+                showToast('Removed from Your Library');
+            }
+        });
+    }
 }
 
 // ===================================

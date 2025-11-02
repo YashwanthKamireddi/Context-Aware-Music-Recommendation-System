@@ -19,6 +19,145 @@ import json
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_genre(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip().lower()
+    return ""
+
+
+def _to_numeric(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        if pd.isna(value):
+            return None
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def track_passes_filters(track: pd.Series, mood_cfg: Dict[str, Any]) -> bool:
+    """Check whether a track satisfies categorical and metadata filters for a mood."""
+    filters = mood_cfg.get('filters', {})
+    if not filters:
+        return True
+
+    genre_value = _normalize_genre(track.get('track_genre', ''))
+
+    includes = [_normalize_genre(g) for g in filters.get('genre_include', []) if g]
+    if includes and genre_value not in includes:
+        return False
+
+    excludes = [_normalize_genre(g) for g in filters.get('genre_exclude', []) if g]
+    if excludes and genre_value in excludes:
+        return False
+
+    explicit_allowed = filters.get('explicit_allowed', True)
+    if explicit_allowed is False:
+        explicit_val = track.get('explicit')
+        if explicit_val is None or pd.isna(explicit_val):
+            return False
+        try:
+            if bool(int(explicit_val)):
+                return False
+        except (TypeError, ValueError):
+            if str(explicit_val).strip().lower() in {'true', '1', 'yes'}:
+                return False
+
+    pop_min = filters.get('popularity_min')
+    if pop_min is not None:
+        popularity = _to_numeric(track.get('popularity'))
+        if popularity is None or popularity < pop_min:
+            return False
+
+    pop_max = filters.get('popularity_max')
+    if pop_max is not None:
+        popularity = _to_numeric(track.get('popularity'))
+        if popularity is None or popularity > pop_max:
+            return False
+
+    duration_min = filters.get('duration_min')
+    if duration_min is not None:
+        duration = _to_numeric(track.get('duration_ms'))
+        if duration is None or duration < duration_min:
+            return False
+
+    duration_max = filters.get('duration_max')
+    if duration_max is not None:
+        duration = _to_numeric(track.get('duration_ms'))
+        if duration is None or duration > duration_max:
+            return False
+
+    return True
+
+
+def filter_soft_scores(track: pd.Series, mood_cfg: Dict[str, Any]) -> List[float]:
+    """Generate soft scores (0-1) for categorical/metadata filters to aid ranking."""
+    filters = mood_cfg.get('filters', {})
+    scores: List[float] = []
+    if not filters:
+        return scores
+
+    genre_value = _normalize_genre(track.get('track_genre', ''))
+
+    includes = [_normalize_genre(g) for g in filters.get('genre_include', []) if g]
+    if includes:
+        scores.append(0.95 if genre_value in includes else 0.15)
+
+    excludes = [_normalize_genre(g) for g in filters.get('genre_exclude', []) if g]
+    if excludes:
+        scores.append(0.05 if genre_value in excludes else 0.9)
+
+    explicit_allowed = filters.get('explicit_allowed', True)
+    if explicit_allowed is False:
+        explicit_val = track.get('explicit')
+        explicit_flag: Optional[bool] = None
+        if explicit_val is not None and not pd.isna(explicit_val):
+            try:
+                explicit_flag = bool(int(explicit_val))
+            except (TypeError, ValueError):
+                explicit_flag = str(explicit_val).strip().lower() in {'true', '1', 'yes'}
+        scores.append(0.92 if explicit_flag is False else (0.1 if explicit_flag else 0.5))
+
+    popularity = _to_numeric(track.get('popularity'))
+    pop_min = filters.get('popularity_min')
+    if pop_min is not None:
+        if popularity is None:
+            scores.append(0.4)
+        else:
+            diff = (popularity - pop_min) / 10.0
+            scores.append(float(1.0 / (1.0 + np.exp(-diff))))
+
+    pop_max = filters.get('popularity_max')
+    if pop_max is not None:
+        if popularity is None:
+            scores.append(0.6)
+        else:
+            diff = (pop_max - popularity) / 10.0
+            scores.append(float(1.0 / (1.0 + np.exp(-diff))))
+
+    duration = _to_numeric(track.get('duration_ms'))
+    duration_min = filters.get('duration_min')
+    if duration_min is not None:
+        if duration is None:
+            scores.append(0.4)
+        else:
+            diff = (duration - duration_min) / 30000.0
+            scores.append(float(1.0 / (1.0 + np.exp(-diff))))
+
+    duration_max = filters.get('duration_max')
+    if duration_max is not None:
+        if duration is None:
+            scores.append(0.6)
+        else:
+            diff = (duration_max - duration) / 30000.0
+            scores.append(float(1.0 / (1.0 + np.exp(-diff))))
+
+    return scores
+
 class MLMoodClassifier:
     """
     Machine Learning-based mood classifier using trained models for each mood
@@ -215,7 +354,8 @@ def create_mood_labels(df: pd.DataFrame, mood: str, config: Dict) -> pd.Series:
     Returns:
         Binary labels (0/1) for the mood
     """
-    criteria = config['moods'][mood]['criteria']
+    mood_cfg = config['moods'][mood]
+    criteria = mood_cfg['criteria']
     labels = pd.Series([True] * len(df), index=df.index)
 
     # Apply each criterion
@@ -228,6 +368,11 @@ def create_mood_labels(df: pd.DataFrame, mood: str, config: Dict) -> pd.Series:
             base_feature = feature[:-4]  # Remove '_max'
             if base_feature in df.columns:
                 labels &= (df[base_feature] <= condition)
+
+    filters = mood_cfg.get('filters', {})
+    if filters:
+        filter_mask = df.apply(lambda row: track_passes_filters(row, mood_cfg), axis=1)
+        labels &= filter_mask
 
     return labels.astype(int)
 
@@ -257,11 +402,11 @@ def train_mood_model(df: pd.DataFrame, mood: str, config: Dict) -> Tuple[Any, An
     y = labels
 
     # Split data
-    test_size = config.get('data', {}).get('train_test_split', 0.2)
+    test_size = config.get('data', {}).get('test_split', 0.2)
     random_seed = config.get('data', {}).get('random_seed', 42)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_seed, stratify=y
+    X, y, test_size=test_size, random_state=random_seed, stratify=y
     )
 
     # Scale features

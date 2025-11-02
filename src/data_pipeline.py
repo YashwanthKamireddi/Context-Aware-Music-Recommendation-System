@@ -211,9 +211,11 @@ class DataPipeline:
         Returns:
             Tuple of (train_df, test_df)
         """
+        test_size = self.data_config.get('test_split', 0.2)
+
         train_df, test_df = train_test_split(
             df,
-            test_size=1 - self.data_config['train_test_split'],
+            test_size=test_size,
             random_state=self.data_config['random_seed'],
             stratify=df['target'] if 'target' in df.columns else None
         )

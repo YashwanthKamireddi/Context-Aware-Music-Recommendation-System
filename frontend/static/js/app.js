@@ -1,6 +1,13 @@
 // Vibe-Sync Frontend JavaScript
 
 const API_BASE = window.location.origin;
+const MOOD_NAMES = {
+    workout: 'Workout',
+    chill: 'Chill',
+    party: 'Party',
+    focus: 'Focus',
+    sleep: 'Sleep'
+};
 
 // State
 let currentMood = null;
@@ -28,6 +35,11 @@ function setupEventListeners() {
         showSection('mood');
     });
 
+    // Hero explore button
+    document.getElementById('explore-btn')?.addEventListener('click', () => {
+        document.getElementById('mood-section')?.scrollIntoView({ behavior: 'smooth' });
+    });
+
     // Spotify setup form
     document.getElementById('spotify-setup-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -51,6 +63,7 @@ async function checkHealth() {
     } catch (error) {
         console.error('Health check failed:', error);
         updateStatus(false, false);
+        setStatusPill('error', 'Server offline');
     }
 }
 
@@ -58,8 +71,11 @@ function updateStatus(healthy, connected) {
     const indicator = document.getElementById('status-indicator');
     const text = document.getElementById('status-text');
 
+    if (!indicator || !text) return;
+
+    indicator.classList.toggle('connected', healthy && connected);
+
     if (healthy && connected) {
-        indicator.classList.add('connected');
         text.textContent = 'Connected to Spotify';
     } else if (healthy) {
         text.textContent = 'Ready (No Spotify)';
@@ -110,6 +126,7 @@ async function selectMood(mood) {
     currentMood = mood;
     showSection('results');
     showLoading(true);
+    setSelectedMood(mood);
 
     try {
         const response = await fetch(`${API_BASE}/api/recommend`, {
@@ -154,8 +171,20 @@ async function loadStats() {
         if (systemElement) {
             systemElement.textContent = data.mood_classifier_ready ? 'Ready' : 'Setting up...';
         }
+
+        const heroTracks = document.getElementById('hero-tracks');
+        if (heroTracks) {
+            heroTracks.textContent = data.total_tracks > 0 ? data.total_tracks.toLocaleString() : '-';
+        }
+
+        updateModelReady(data.mood_classifier_ready, data.spotify_connected);
+        const heroReady = document.getElementById('hero-ready');
+        if (heroReady) {
+            heroReady.textContent = data.mood_classifier_ready ? 'Ready' : 'Loading';
+        }
     } catch (error) {
         console.error('Stats error:', error);
+        setStatusPill('error', 'Unable to load stats');
     }
 }
 
@@ -163,6 +192,11 @@ async function loadStats() {
 function showSection(section) {
     document.getElementById('mood-section').classList.toggle('hidden', section !== 'mood');
     document.getElementById('results-section').classList.toggle('hidden', section !== 'results');
+
+    if (section === 'mood') {
+        setSelectedMood(null);
+        currentMood = null;
+    }
 }
 
 function showLoading(show) {
@@ -244,4 +278,62 @@ function formatDuration(ms) {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function setSelectedMood(mood) {
+    const pill = document.getElementById('selected-mood-pill');
+    const title = document.getElementById('results-title');
+    const subtitle = document.getElementById('results-subtitle');
+
+    if (!pill || !title || !subtitle) {
+        return;
+    }
+
+    if (!mood) {
+        pill.classList.add('hidden');
+        title.textContent = 'Your Personalized Playlist';
+        subtitle.textContent = 'Tracks ranked by mood compatibility score';
+        return;
+    }
+
+    const displayName = MOOD_NAMES[mood] || mood;
+    pill.textContent = `Mood: ${displayName}`;
+    pill.classList.remove('hidden');
+    title.textContent = `${displayName} Playlist`;
+    subtitle.textContent = `Top recommendations optimized for ${displayName.toLowerCase()} vibes`;
+}
+
+function updateModelReady(ready, spotifyConnected) {
+    if (ready) {
+        const message = spotifyConnected ? 'Models ready · Spotify connected' : 'Models ready · offline dataset';
+        setStatusPill('ready', message);
+    } else {
+        setStatusPill('warning', 'Loading models...');
+    }
+}
+
+function setStatusPill(state, message) {
+    const pill = document.getElementById('model-status-pill');
+    const indicator = document.getElementById('model-status-indicator');
+    const text = document.getElementById('model-status-text');
+
+    if (!pill || !indicator || !text) {
+        return;
+    }
+
+    pill.classList.remove('ready', 'error');
+
+    if (state === 'ready') {
+        pill.classList.add('ready');
+    } else if (state === 'error') {
+        pill.classList.add('error');
+    }
+
+    text.textContent = message;
+
+    if (state === 'error') {
+        indicator.style.animation = 'pulse 1.2s infinite';
+    } else {
+        indicator.style.animation = '';
+    }
 }

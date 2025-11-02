@@ -1,12 +1,12 @@
 vibe-sync/
 # 🎵 Vibe-Sync: Context-Aware Music Recommendation System
 
-Real LightGBM models trained on 114k Spotify tracks deliver mood-aware playlists in a Spotify-style web UI backed by FastAPI.
+Random Forest models trained on 114k Spotify tracks deliver mood-aware playlists in a Spotify-style web UI backed by FastAPI.
 
 ## 🚀 What’s Included
 
-- **Genuine ML pipeline** – five binary LightGBM classifiers (workout, chill, party, focus, sleep) using only the nine Spotify audio features that ship with the Kaggle dataset.
-- **Real training script** – `train_kaggle_models.py` preprocesses, labels, trains, evaluates, and persists models + scalers + feature lists.
+- **Genuine ML pipeline** – five binary Random Forest classifiers (workout, chill, party, focus, sleep) using only the nine Spotify audio features that ship with the Kaggle dataset.
+- **Real training script** – `scripts/train_models.py` preprocesses, labels, trains, evaluates, and persists models + scalers + feature lists.
 - **Production FastAPI backend** – serves the React-like frontend, loads the Kaggle data, scores recommendations in vectorized batches, and hydrates album art via Spotify when credentials are supplied.
 - **Modern Spotify-style frontend** – `frontend/` renders dynamic playlists, autoplay previews, and mood cards with live ML scores.
 - **End-to-end tooling** – PowerShell/Windows friendly scripts, reproducible requirements, logging, and model artifacts checked in for immediate use.
@@ -25,7 +25,7 @@ Context-Aware-Music-Recommendation-System/
 ├── reports/                 # ML case study reports
 ├── scripts/                 # Utility scripts
 ├── ML_Case_Study_Workflow.ipynb  # Educational notebook
-├── train_ml_models.py       # Model training script
+├── scripts/train_models.py  # Model training script
 ├── requirements.txt         # Python dependencies
 ├── pyrightconfig.json       # Python type checking config
 └── README.md
@@ -80,7 +80,7 @@ Without credentials, the system works but album art falls back to placeholders.
 # Windows: .venv\Scripts\activate
 # Linux/Mac: source .venv/bin/activate
 
-python train_ml_models.py
+python scripts/train_models.py
 ```
 
 This will:
@@ -118,13 +118,15 @@ The system will:
 3. Fetch album art from Spotify (if credentials provided)
 4. Display mood-based recommendations in a Spotify-style UI
 
+Scores shown in the UI are calibrated by blending model probabilities with the configuration heuristics, so each playlist displays a realistic confidence range instead of every card reading 100%.
+
 ## 🤖 Core ML Details
 
 - **Features:** `acousticness, danceability, energy, instrumentalness, liveness, loudness, speechiness, tempo, valence`
 - **Models:** Random Forest Classifier (`n_estimators=100`, `max_depth=10`, `class_weight='balanced'`)
 - **Training Data:** 114K+ Spotify tracks with mood-based labeling
 - **Architecture:** Binary classification for each mood (workout, chill, party, focus, sleep)
-- **Serving:** Batch prediction with vectorized scoring for real-time recommendations
+- **Serving:** Batch prediction with vectorized scoring, sigmoid-based heuristic blending, and confidence filtering so playlist percentages span a realistic range instead of defaulting to 100%
 
 ## 🛠️ Useful Commands
 

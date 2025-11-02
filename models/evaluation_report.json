@@ -1,0 +1,52 @@
+{
+  "workout": {
+    "n_samples": 100000,
+    "positive_ratio": 0.12811,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0000000000000002,
+    "brier": 0.00025894915965573537
+  },
+  "chill": {
+    "n_samples": 100000,
+    "positive_ratio": 0.1699,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0,
+    "brier": 0.00019077415099597595
+  },
+  "party": {
+    "n_samples": 100000,
+    "positive_ratio": 0.08354,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0,
+    "brier": 0.00012058394864334736
+  },
+  "focus": {
+    "n_samples": 100000,
+    "positive_ratio": 0.08365,
+    "accuracy": 0.99984,
+    "precision": 0.999880253861813,
+    "recall": 0.9982068141063957,
+    "f1": 0.9990428332136875,
+    "roc_auc": 0.999999093965113,
+    "brier": 0.00024996828704297537
+  },
+  "sleep": {
+    "n_samples": 100000,
+    "positive_ratio": 0.04738,
+    "accuracy": 0.99995,
+    "precision": 1.0,
+    "recall": 0.9989447024060785,
+    "f1": 0.9994720726428044,
+    "roc_auc": 0.9999999933532935,
+    "brier": 0.0001235694270120742
+  }
+}

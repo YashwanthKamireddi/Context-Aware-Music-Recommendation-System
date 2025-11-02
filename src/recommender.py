@@ -3,13 +3,14 @@ Recommendation Engine: Real-time mood-based music recommendations
 Using machine learning models for mood classification
 """
 
+import math
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Any, Tuple, Optional
 import logging
 
 from src.utils import load_config, setup_logging
-from src.ml_mood_classifier import MLMoodClassifier
+from src.ml_mood_classifier import MLMoodClassifier, track_passes_filters, filter_soft_scores
 
 
 logger = setup_logging()
@@ -108,6 +109,24 @@ class MoodRecommender:
 
         return profile
 
+    def _get_feature_scale(self, feature: str, threshold: float) -> float:
+        """Return a scale factor for the logistic scoring function."""
+        feature = feature.lower()
+
+        if feature == 'tempo':
+            return 25.0  # BPM granularity
+        if feature == 'loudness':
+            return 6.0   # dB range
+        if feature == 'duration_ms':
+            return 45000.0  # 45 seconds
+
+        # Features in [0, 1]
+        if threshold <= 1.0:
+            return max(0.08, threshold * 0.5 if threshold else 0.08)
+
+        # Fallback scale for other ranges
+        return max(0.5, abs(threshold) * 0.15)
+
     def calculate_mood_match_score(self, track: pd.Series, mood: str) -> float:
         """
         Calculate how well a track matches a mood
@@ -120,22 +139,45 @@ class MoodRecommender:
             Match score (0-1)
         """
         mood_criteria = self.mood_config[mood]['criteria']
+        scores: List[float] = []
 
-        matches = 0
-        total = len(mood_criteria)
+        for criterion, threshold in mood_criteria.items():
+            base_feature = criterion.replace('_min', '').replace('_max', '')
 
-        for feature, threshold in mood_criteria.items():
-            feature_name = feature.replace('_min', '').replace('_max', '')
+            if base_feature not in track.index:
+                continue
 
-            if feature_name in track.index:
-                if '_min' in feature:
-                    if track[feature_name] >= threshold:
-                        matches += 1
-                elif '_max' in feature:
-                    if track[feature_name] <= threshold:
-                        matches += 1
+            raw_value = track.get(base_feature)
+            if raw_value is None:
+                continue
 
-        return matches / total if total > 0 else 0.0
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+
+            if math.isnan(value):
+                continue
+
+            scale = self._get_feature_scale(base_feature, float(threshold))
+            if scale == 0:
+                scale = 0.1
+
+            if criterion.endswith('_min'):
+                diff = (value - threshold) / scale
+            else:
+                diff = (threshold - value) / scale
+
+            # Sigmoid to map to (0,1); 0.5 when exactly on the boundary
+            score = float(1.0 / (1.0 + np.exp(-diff)))
+            scores.append(score)
+
+        scores.extend(filter_soft_scores(track, self.mood_config[mood]))
+
+        if not scores:
+            return 0.5
+
+        return float(np.clip(np.mean(scores), 0.05, 0.95))
 
     def calculate_user_match_score(self, track: pd.Series,
                                    user_profile: Optional[Dict[str, float]]) -> float:
@@ -195,10 +237,13 @@ class MoodRecommender:
         mood_scores = {}
         for mood_name in self.mood_config.keys():
             score = self.mood_classifier.predict_mood(features, mood_name)
-            mood_scores[mood_name] = score
+            score = 0.02 + 0.96 * float(score)  # shrink extremes
+            mood_scores[mood_name] = np.clip(score, 0.02, 0.98)
 
-        # Return compatibility score for the target mood
-        return mood_scores.get(mood, 0.0)
+        heuristic_score = self.calculate_mood_match_score(pd.Series(features), mood)
+        adjusted_model = mood_scores.get(mood, 0.0) * (0.5 + 0.5 * heuristic_score)
+        combined = 0.7 * adjusted_model + 0.3 * heuristic_score
+        return float(np.clip(combined, 0.02, 0.98))
 
     def calculate_diversity_penalty(self, track: pd.Series,
                                    selected_tracks: List[pd.Series]) -> float:
@@ -252,10 +297,31 @@ class MoodRecommender:
 
         # Calculate mood compatibility scores using batch prediction for efficiency
         mood_scores = self.mood_classifier.batch_predict_mood(candidates, mood)
+        calibrated_mood_scores = 0.02 + 0.96 * mood_scores
 
         # Create results dataframe
         results_df = candidates.copy()
-        results_df['mood_score'] = mood_scores
+        results_df['mood_score'] = np.clip(calibrated_mood_scores, 0.02, 0.98)
+
+        # Heuristic score based on distance to configuration thresholds
+        heuristic_scores = results_df.apply(
+            lambda row: self.calculate_mood_match_score(row, mood), axis=1
+        )
+        results_df['heuristic_score'] = np.clip(heuristic_scores, 0.05, 0.95)
+
+        # Down-weight model confidence when heuristics are weak
+        results_df['mood_score'] = (
+            results_df['mood_score'] * (0.5 + 0.5 * results_df['heuristic_score'])
+        )
+        results_df['mood_score'] = results_df['mood_score'].clip(0.02, 0.98)
+
+        filters_cfg = self.mood_config[mood].get('filters', {})
+        if filters_cfg:
+            results_df['passes_filters'] = results_df.apply(
+                lambda row: track_passes_filters(row, self.mood_config[mood]), axis=1
+            )
+        else:
+            results_df['passes_filters'] = True
 
         # Calculate user match score if profile available
         if user_profile:
@@ -265,10 +331,20 @@ class MoodRecommender:
                 user_scores.append(user_score)
             results_df['user_score'] = user_scores
 
-            # Combine mood and user scores (weighted average)
-            results_df['final_score'] = 0.7 * results_df['mood_score'] + 0.3 * results_df['user_score']
+            # Combine mood, heuristic, and user scores (weighted average)
+            results_df['final_score'] = (
+                0.6 * results_df['mood_score'] +
+                0.25 * results_df['heuristic_score'] +
+                0.15 * results_df['user_score']
+            )
         else:
-            results_df['final_score'] = results_df['mood_score']
+            results_df['final_score'] = (
+                0.7 * results_df['mood_score'] +
+                0.3 * results_df['heuristic_score']
+            )
+
+        results_df.loc[results_df['passes_filters'], 'final_score'] += 0.05
+        results_df.loc[~results_df['passes_filters'], 'final_score'] -= 0.05
 
         # Sort by final score (highest first)
         results_df = results_df.sort_values('final_score', ascending=False)
@@ -284,7 +360,18 @@ class MoodRecommender:
         if 'id' not in results_df.columns and 'track_id' in results_df.columns:
             results_df['id'] = results_df['track_id']
 
-        logger.info(f"✅ Realistic mood ranking complete! Score range: {results_df['final_score'].min():.3f} to {results_df['final_score'].max():.3f}")
+        results_df['final_score'] = results_df['final_score'].clip(0.02, 0.99)
+
+        if 'passes_filters' in results_df.columns:
+            preferred = results_df[results_df['passes_filters']]
+            others = results_df[~results_df['passes_filters']]
+            results_df = pd.concat([preferred, others], ignore_index=True)
+
+        logger.info(
+            "✅ Realistic mood ranking complete! Score range: %.3f to %.3f",
+            results_df['final_score'].min(),
+            results_df['final_score'].max()
+        )
 
         return results_df
 
@@ -318,8 +405,17 @@ class MoodRecommender:
         # Rank tracks
         ranked = self.rank_tracks(prepared_candidates, mood, user_profile)
 
-        # Return top-k
-        recommendations = ranked.head(top_k)
+        # Return top-k, enforcing confidence threshold when available
+        min_confidence = float(self.recommender_config.get('min_confidence', 0.0))
+        confident = ranked[ranked['final_score'] >= min_confidence]
+
+        if confident.empty:
+            recommendations = ranked.head(top_k).copy()
+        else:
+            recommendations = confident.head(top_k).copy()
+
+        if 'passes_filters' in recommendations.columns:
+            recommendations.drop(columns=['passes_filters'], inplace=True)
 
         # Calculate multi-mood compatibility scores for top recommendations
         logger.info("Calculating multi-mood compatibility scores...")
@@ -336,7 +432,6 @@ class MoodRecommender:
             multi_mood_scores.append(mood_scores)
 
         # Add multi-mood scores to recommendations
-        recommendations = recommendations.copy()
         for i, mood_name in enumerate(self.mood_classifier.moods):
             recommendations[f'{mood_name}_score'] = [scores[mood_name] for scores in multi_mood_scores]
 
